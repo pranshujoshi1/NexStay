@@ -27,7 +27,8 @@ export function useAdminProperties(params?: { q?: string; page?: number }) {
       const { data } = await api('/properties', { params });
       return data as { data: any[]; total: number; hasNextPage: boolean };
     },
-    staleTime: 30000,
+    staleTime: 0,           // Always re-fetch to reflect super admin approvals
+    refetchOnWindowFocus: true,
   });
 }
 

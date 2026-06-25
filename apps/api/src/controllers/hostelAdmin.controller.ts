@@ -10,7 +10,6 @@ import { RentRecord } from '../models/RentRecord.model';
 import { Complaint } from '../models/Complaint.model';
 import { Expense } from '../models/Expense.model';
 import { Notification } from '../models/Notification.model';
-import { User } from '../models/User.model';
 import { notify } from '../services/notification.service';
 
 
@@ -195,16 +194,11 @@ export const createAdminProperty = async (req: AuthRequest, res: Response): Prom
   try {
     const tenantId = req.user!.id;
 
-    // ── Owner verification gate ──────────────────────────────────────────────
-    const owner = await User.findById(tenantId).lean();
-    if (!owner || owner.ownerVerificationStatus !== 'APPROVED') {
-      res.status(403).json({
-        success: false,
-        code: 'OWNER_NOT_VERIFIED',
-        message: 'Your account must be verified before listing properties. Please complete the verification process in your profile settings and wait for Super Admin approval.',
-      });
-      return;
-    }
+    // Note: We allow PENDING owners to submit properties.
+    // The property itself gets verificationStatus: 'PENDING' and won't appear on the
+    // public marketplace until a Super Admin approves it. That is the correct review gate.
+    // Blocking property *submission* for PENDING owners would break the core workflow:
+    // signup → list property → Super Admin reviews → approve owner + property.
 
     const {
       name, description, address, city, locality, state, pincode,
@@ -218,6 +212,15 @@ export const createAdminProperty = async (req: AuthRequest, res: Response): Prom
     }
 
 
+    // Compute rentStartingFrom = min pricePerBed across all room setups
+    let rentStartingFrom = 0;
+    if (Array.isArray(roomSetups) && roomSetups.length > 0) {
+      const prices = roomSetups
+        .map((rs: any) => Number(rs.pricePerBed))
+        .filter((p) => p > 0);
+      if (prices.length > 0) rentStartingFrom = Math.min(...prices);
+    }
+
     const property = await Property.create({
       tenantId, name, description, address, city, locality, state, pincode,
       latitude, longitude, gender,
@@ -225,6 +228,7 @@ export const createAdminProperty = async (req: AuthRequest, res: Response): Prom
       rules, foodIncluded: foodIncluded ?? false,
       images: images ?? [],
       videoUrl,
+      rentStartingFrom,
       verificationStatus: 'PENDING',
       isActive: true, isPaused: false, rating: 0, reviewCount: 0,
     });

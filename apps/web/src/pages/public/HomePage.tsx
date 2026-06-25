@@ -78,6 +78,10 @@ export default function HomePage() {
   const [geoLoading, setGeoLoading] = useState(false);
   const [geoError, setGeoError] = useState('');
 
+  // Fetch total verified property count for hero badge
+  const { data: totalData } = usePublicProperties({ limit: 1 });
+  const totalVerified = totalData?.totalCount ?? 0;
+
   const handleSearch = () => {
     const q = searchInput.trim();
     navigate(q ? `/search?city=${encodeURIComponent(q)}` : '/search');
@@ -111,7 +115,7 @@ export default function HomePage() {
         <div className="max-w-3xl mx-auto text-center">
           <div className="inline-flex items-center gap-2 bg-blue-50 text-blue-700 text-xs font-semibold px-3 py-1.5 rounded-full mb-5">
             <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
-            500+ Verified PGs &amp; Hostels
+            {totalVerified > 0 ? `${totalVerified}+ Verified PGs & Hostels` : 'Verified PGs & Hostels'}
           </div>
 
           <h1 className="text-4xl sm:text-5xl font-bold text-slate-900 leading-tight mb-3">
@@ -181,7 +185,7 @@ export default function HomePage() {
         <div className="max-w-4xl mx-auto flex flex-wrap items-center justify-center gap-6 text-sm text-slate-500 font-medium">
           <span className="flex items-center gap-1.5"><span className="text-green-500 font-bold">✓</span> Verified Owners</span>
           <span className="w-px h-4 bg-slate-200 hidden sm:block" />
-          <span className="flex items-center gap-1.5"><span className="text-blue-500 font-bold">⭐</span> 4.5+ Avg Rating</span>
+          <span className="flex items-center gap-1.5"><span className="text-blue-500 font-bold">⭐</span> Rated by Students</span>
           <span className="w-px h-4 bg-slate-200 hidden sm:block" />
           <span className="flex items-center gap-1.5"><span className="text-violet-500 font-bold">🔐</span> Safe &amp; Secure</span>
           <span className="w-px h-4 bg-slate-200 hidden sm:block" />

@@ -124,20 +124,11 @@ export default function BookingFlowPage() {
     else setStep(s => s - 1);
   };
 
-  // ── Payment mock ────────────────────────────────────────────────────────────
+  // ── Payment handler ──────────────────────────────────────────────────────────
   const handlePay = async () => {
     setPayLoading(true);
     setPayError('');
-    // 2-second processing animation
-    await new Promise(r => setTimeout(r, 2000));
-    // 10% failure
-    if (Math.random() < 0.1) {
-      setPayLoading(false);
-      setPayError('Payment failed. Your card was declined. Please try again or use a different method.');
-      return;
-    }
     try {
-      const selectedRoom = rooms.find(r => r._id === booking.selectedRoomId);
       const res = await axios.post('/api/guest/bookings', {
         propertyId,
         roomId: booking.selectedRoomId,
@@ -148,7 +139,7 @@ export default function BookingFlowPage() {
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setBookingRef(res.data.referenceId ?? 'NSB-000000');
+      setBookingRef(res.data.referenceId ?? '');
       setBookingId(res.data.data?._id ?? '');
       setStep(5);
     } catch (err: any) {

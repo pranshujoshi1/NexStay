@@ -95,13 +95,9 @@ export const getPublicProperties = async (req: Request, res: Response): Promise<
       if (list.length) filter.amenities = { $all: list };
     }
 
-    // Price filter — we filter by rentStartingFrom as a rough pre-filter
-    // (accurate per-room filter is applied in enrichment step)
-    if (minPrice || maxPrice) {
-      filter.rentStartingFrom = {};
-      if (minPrice) filter.rentStartingFrom.$gte = Number(minPrice);
-      if (maxPrice) filter.rentStartingFrom.$lte = Number(maxPrice);
-    }
+    // NOTE: Price pre-filter intentionally removed — properties with rentStartingFrom=0
+    // (e.g. newly created before schema fix) would be incorrectly excluded.
+    // Accurate price filtering is done post-enrichment using actual room prices (line ~156).
 
     // Room type filter — find properties that have rooms of the requested type
     let propertyIdsWithRoomType: any[] | undefined;

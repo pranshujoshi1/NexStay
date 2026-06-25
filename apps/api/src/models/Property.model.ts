@@ -17,6 +17,7 @@ export interface IPropertyDoc extends Document {
   foodIncluded: boolean;
   images: string[];
   videoUrl?: string;
+  rentStartingFrom: number;
   verificationStatus: string;
   rejectionReason?: string;
   isActive: boolean;
@@ -49,6 +50,7 @@ const PropertySchema = new Schema<IPropertyDoc>(
     foodIncluded: { type: Boolean, default: false },
     images: [{ type: String }],
     videoUrl: { type: String, default: '' },
+    rentStartingFrom: { type: Number, default: 0 },
     verificationStatus: {
       type: String,
       enum: ['PENDING', 'APPROVED', 'REJECTED'],

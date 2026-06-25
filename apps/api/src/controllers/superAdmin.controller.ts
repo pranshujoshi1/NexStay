@@ -172,6 +172,15 @@ export const approveProperty = async (req: AuthRequest, res: Response): Promise<
     if (!prop) { res.status(404).json({ success: false, message: 'Property not found' }); return; }
     prop.verificationStatus = 'APPROVED';
     prop.rejectionReason = '';
+
+    // Backfill rentStartingFrom from rooms if missing
+    if (!prop.rentStartingFrom || prop.rentStartingFrom === 0) {
+      const { Room } = await import('../models/Room.model');
+      const rooms = await Room.find({ propertyId: prop._id }).select('pricePerBed').lean();
+      const prices = rooms.map((r: any) => r.pricePerBed).filter((p: number) => p > 0);
+      if (prices.length > 0) prop.rentStartingFrom = Math.min(...prices);
+    }
+
     await prop.save();
     notify({
       userId: prop.tenantId.toString(),

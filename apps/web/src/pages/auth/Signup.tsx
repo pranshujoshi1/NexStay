@@ -1,35 +1,55 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Building2, ArrowRight, Loader2, CheckCircle2 } from 'lucide-react';
+import { Building2, ArrowRight, Loader2, CheckCircle2, Home } from 'lucide-react';
 import api from '@/lib/api';
 import { cn } from '@/lib/utils';
 
+// ─── Role values must exactly match what the backend accepts ─────────────────
+// Backend allowedRoles: ['GUEST', 'HOSTEL_ADMIN']
 const schema = z.object({
-  name: z.string().min(2),
-  email: z.string().email(),
-  phone: z.string().min(10).max(15),
-  password: z.string().min(6),
+  name: z.string().min(2, 'Name must be at least 2 characters'),
+  email: z.string().email('Enter a valid email'),
+  phone: z.string().min(10, 'Enter a valid phone number').max(15),
+  password: z.string().min(6, 'Password must be at least 6 characters'),
   confirmPassword: z.string(),
-  role: z.enum(['STUDENT', 'PG_OWNER']),
+  role: z.enum(['GUEST', 'HOSTEL_ADMIN']),
+  businessName: z.string().optional(),
 }).refine((d) => d.password === d.confirmPassword, { message: "Passwords don't match", path: ['confirmPassword'] });
 type FormData = z.infer<typeof schema>;
 
 export default function SignupPage() {
   const [serverError, setServerError] = useState('');
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  // Pre-select role based on URL param (e.g. /signup?role=HOSTEL_ADMIN from "List Your PG")
+  const roleParam = searchParams.get('role');
+  const defaultRole = roleParam === 'HOSTEL_ADMIN' ? 'HOSTEL_ADMIN' : 'GUEST';
+
   const { register, handleSubmit, watch, setValue, formState: { errors, isSubmitting } } = useForm<FormData>({
-    resolver: zodResolver(schema), defaultValues: { role: 'STUDENT' },
+    resolver: zodResolver(schema),
+    defaultValues: { role: defaultRole },
   });
   const selectedRole = watch('role');
+  const isOwner = selectedRole === 'HOSTEL_ADMIN';
 
   const onSubmit = async (data: FormData) => {
     setServerError('');
     try {
-      const res = await api.post('/auth/signup', data);
-      navigate('/verify-otp', { state: { email: data.email, otp: res.data.otp } });
+      // role is already 'GUEST' or 'HOSTEL_ADMIN' — matches backend exactly
+      const payload = {
+        name: data.name,
+        email: data.email,
+        phone: data.phone,
+        password: data.password,
+        role: data.role,
+        ...(data.role === 'HOSTEL_ADMIN' && data.businessName ? { businessName: data.businessName } : {}),
+      };
+      const res = await api.post('/auth/register', payload);
+      navigate('/verify-otp', { state: { email: data.email, otp: res.data.otp, role: data.role } });
     } catch (err: any) {
       setServerError(err?.response?.data?.message || 'Signup failed');
     }
@@ -78,15 +98,37 @@ export default function SignupPage() {
             <div>
               <label className="block text-sm font-medium text-text-primary mb-2">I am a...</label>
               <div className="grid grid-cols-2 gap-3">
-                {([['STUDENT', 'Student / Tenant', 'Looking for a PG'], ['PG_OWNER', 'PG Owner', 'I manage PGs']] as const).map(([value, label, desc]) => (
-                  <button key={value} type="button" onClick={() => setValue('role', value)}
-                    className={cn('p-3 rounded-lg border text-left transition-all duration-200',
-                      selectedRole === value ? 'border-brand-primary bg-brand-primary/10' : 'border-surface-border bg-surface-card hover:border-surface-border/80')}>
-                    <p className={cn('font-medium text-sm', selectedRole === value ? 'text-text-primary' : 'text-text-muted')}>{label}</p>
-                    <p className="text-xs text-text-faint mt-0.5">{desc}</p>
-                  </button>
-                ))}
+                {/* GUEST = student/tenant looking to book */}
+                <button type="button" onClick={() => setValue('role', 'GUEST')}
+                  className={cn('p-3 rounded-lg border text-left transition-all duration-200',
+                    selectedRole === 'GUEST' ? 'border-brand-primary bg-brand-primary/10 shadow-sm' : 'border-surface-border bg-surface-card hover:border-brand-primary/40')}>
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <Home className={cn('w-4 h-4', selectedRole === 'GUEST' ? 'text-brand-primary' : 'text-text-muted')} />
+                    <p className={cn('font-medium text-sm', selectedRole === 'GUEST' ? 'text-text-primary' : 'text-text-muted')}>Student / Tenant</p>
+                  </div>
+                  <p className="text-xs text-text-faint mt-0.5 pl-6">Looking for a PG</p>
+                </button>
+                {/* HOSTEL_ADMIN = property owner who manages PGs */}
+                <button type="button" onClick={() => setValue('role', 'HOSTEL_ADMIN')}
+                  className={cn('p-3 rounded-lg border text-left transition-all duration-200',
+                    selectedRole === 'HOSTEL_ADMIN' ? 'border-brand-primary bg-brand-primary/10 shadow-sm' : 'border-surface-border bg-surface-card hover:border-brand-primary/40')}>
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <Building2 className={cn('w-4 h-4', selectedRole === 'HOSTEL_ADMIN' ? 'text-brand-primary' : 'text-text-muted')} />
+                    <p className={cn('font-medium text-sm', selectedRole === 'HOSTEL_ADMIN' ? 'text-text-primary' : 'text-text-muted')}>PG Owner</p>
+                  </div>
+                  <p className="text-xs text-text-faint mt-0.5 pl-6">I manage PGs</p>
+                </button>
               </div>
+              {/* Contextual hint based on selected role */}
+              {isOwner ? (
+                <p className="text-xs text-brand-primary/80 mt-2 flex items-center gap-1.5">
+                  <Building2 className="w-3 h-3 flex-shrink-0" /> You'll get access to the full Hostel ERP dashboard after verification
+                </p>
+              ) : (
+                <p className="text-xs text-text-faint mt-2 flex items-center gap-1.5">
+                  <Home className="w-3 h-3 flex-shrink-0" /> Browse and book verified PGs & hostels near you
+                </p>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -107,6 +149,16 @@ export default function SignupPage() {
               <input {...register('email')} type="email" placeholder="you@example.com" className={cn('input-field', errors.email && 'border-status-error')} />
               {errors.email && <p className="text-status-error text-xs mt-1">{errors.email.message}</p>}
             </div>
+
+            {/* Business name — only for hostel owners */}
+            {isOwner && (
+              <div>
+                <label className="block text-sm font-medium text-text-primary mb-1.5">
+                  Business / PG Name <span className="text-text-faint font-normal">(optional)</span>
+                </label>
+                <input {...register('businessName')} placeholder="e.g. Sunrise Boys PG" className="input-field" />
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-3">
               <div>

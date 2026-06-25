@@ -246,17 +246,19 @@ export default function PropertyDetailPage() {
             )}
 
             {/* ── f) Rules ───────────────────────────────────────────────────── */}
-            <section>
-              <h2 className="text-base font-bold text-slate-900 mb-2">House Rules</h2>
-              <ul className="space-y-1.5">
-                {['No smoking on premises','Visitors allowed till 9 PM','Maintain quiet hours after 10 PM','Kitchen closes at 10 PM','Guests must register with management'].map(rule => (
-                  <li key={rule} className="flex items-start gap-2 text-sm text-slate-600">
-                    <span className="text-green-500 font-bold mt-0.5">✓</span>
-                    {rule}
-                  </li>
-                ))}
-              </ul>
-            </section>
+            {property.rules && property.rules.trim().length > 0 && (
+              <section>
+                <h2 className="text-base font-bold text-slate-900 mb-2">House Rules</h2>
+                <ul className="space-y-1.5">
+                  {property.rules.split('\n').filter((r: string) => r.trim()).map((rule: string) => (
+                    <li key={rule} className="flex items-start gap-2 text-sm text-slate-600">
+                      <span className="text-green-500 font-bold mt-0.5">✓</span>
+                      {rule.trim()}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
 
             {/* ── g) Room Types & Availability ────────────────────────────────── */}
             {rooms.length > 0 && (

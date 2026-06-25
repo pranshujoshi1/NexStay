@@ -38,7 +38,14 @@ export default function OtpVerificationPage() {
       localStorage.setItem('accessToken', data.accessToken);
       localStorage.setItem('refreshToken', data.refreshToken);
       setUser(data.user);
-      navigate('/');
+      // Route to the correct dashboard based on the user's actual role from the server response
+      if (data.user?.role === 'HOSTEL_ADMIN') {
+        navigate('/admin/dashboard');
+      } else if (data.user?.role === 'SUPER_ADMIN') {
+        navigate('/superadmin/dashboard');
+      } else {
+        navigate('/account/bookings');
+      }
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Invalid OTP');
     } finally { setIsLoading(false); }
