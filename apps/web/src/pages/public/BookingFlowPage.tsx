@@ -62,7 +62,7 @@ export default function BookingFlowPage() {
   const { propertyId } = useParams<{ propertyId: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { user, token } = useAuth();
+  const { user, accessToken } = useAuth();
 
   const { data, isLoading } = usePublicPropertyDetail(propertyId);
   const property = data?.data?.property;
@@ -137,7 +137,7 @@ export default function BookingFlowPage() {
         monthlyRent: booking.selectedPricePerBed,
         paymentMethod: booking.paymentMethod,
       }, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${accessToken}` }
       });
       setBookingRef(res.data.referenceId ?? '');
       setBookingId(res.data.data?._id ?? '');

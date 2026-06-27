@@ -1,11 +1,11 @@
 import { Request, Response } from 'express';
 import cloudinary from '../config/cloudinary';
-import { UploadApiResponse } from 'cloudinary';
 
 /**
- * POST /api/upload/image
+ * POST /api/upload/image  (also aliased as /images)
  * Accepts a single image file (multipart/form-data, field: "image")
- * Uploads to Cloudinary and returns the secure URL + public_id
+ * Converts buffer → base64 data URI → Cloudinary signed upload
+ * This avoids upload_stream 403 issues on some Cloudinary plans.
  */
 export const uploadImage = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -14,23 +14,25 @@ export const uploadImage = async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
-    // Upload from buffer using upload_stream
-    const result = await new Promise<UploadApiResponse>((resolve, reject) => {
-      const stream = cloudinary.uploader.upload_stream(
-        {
-          folder: 'nexstay/properties',
-          transformation: [
-            { width: 1200, height: 900, crop: 'limit' },
-            { quality: 'auto', fetch_format: 'auto' },
-          ],
-        },
-        (error, result) => {
-          if (error || !result) return reject(error || new Error('Upload failed'));
-          resolve(result);
-        }
-      );
-      stream.end(req.file!.buffer);
+    console.log('[upload] file:', req.file.originalname, req.file.size, 'bytes', req.file.mimetype);
+
+    // Validate Cloudinary config
+    const cfg = cloudinary.config();
+    if (!cfg.cloud_name || !cfg.api_key || !cfg.api_secret) {
+      console.error('[upload] Cloudinary env not loaded:', { cloud_name: cfg.cloud_name, key: !!cfg.api_key });
+      res.status(500).json({ success: false, message: 'Image service not configured' });
+      return;
+    }
+
+    // Convert buffer → base64 data URI (works on all Cloudinary plans)
+    const b64 = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+
+    const result = await cloudinary.uploader.upload(b64, {
+      folder: 'nexstay/properties',
+      overwrite: false,
     });
+
+    console.log('[upload] ✅ success:', result.public_id);
 
     res.status(200).json({
       success: true,
@@ -38,8 +40,12 @@ export const uploadImage = async (req: Request, res: Response): Promise<void> =>
       public_id: result.public_id,
     });
   } catch (err: any) {
-    console.error('[upload] cloudinary error:', err);
-    res.status(500).json({ success: false, message: err.message || 'Upload failed' });
+    console.error('[upload] FULL ERROR:', JSON.stringify(err, null, 2));
+    res.status(500).json({
+      success: false,
+      message: err?.message || err?.error?.message || 'Upload failed',
+      detail: process.env.NODE_ENV === 'development' ? String(err) : undefined,
+    });
   }
 };
 

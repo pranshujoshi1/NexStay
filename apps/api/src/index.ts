@@ -15,6 +15,9 @@ import reportsRoutes from './routes/reports.routes';
 import superAdminRoutes from './routes/superAdmin.routes';
 import { getDevEmails } from './controllers/notification.controller';
 import uploadRoutes from './routes/upload.routes';
+import wardenRoutes from './routes/warden.routes';
+import messManagerRoutes from './routes/messManager.routes';
+import studentRoutes from './routes/student.routes';
 
 dotenv.config();
 
@@ -59,6 +62,9 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/admin/reports', reportsRoutes);
 app.use('/api/superadmin', superAdminRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/warden', wardenRoutes);
+app.use('/api/mess', messManagerRoutes);
+app.use('/api/student', studentRoutes);
 app.get('/api/dev/emails', getDevEmails);
 
 // ─── Health ──────────────────────────────────────────────────────────────────

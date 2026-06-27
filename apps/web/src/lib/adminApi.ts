@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 
-const getToken = () => localStorage.getItem('accessToken');
+const getToken = () => localStorage.getItem('nexstay_token');
 const authHeaders = () => ({ Authorization: `Bearer ${getToken()}` });
 
 const api = (url: string, options?: any) =>

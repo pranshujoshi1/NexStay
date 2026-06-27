@@ -7,6 +7,7 @@ import {
   getErpStudents, getErpStudentById, getStudentRent,
   recordRentPayment, processCheckIn, processCheckOut, getStudentDues,
 } from '../controllers/erpAdmin.controller';
+import { getRentReceipt } from '../controllers/hostelAdmin.controller';
 import {
   getRentDashboard, getRentRecords, generateMonthlyRent, previewGenerateRent,
   addFine, sendReminders, createFee, getSecurityDeposits,
@@ -21,7 +22,7 @@ import {
 
 const router = Router();
 router.use(protect);
-router.use(requireRoles('HOSTEL_ADMIN'));
+router.use(requireRoles('HOSTEL_ADMIN', 'SUPER_ADMIN', 'WARDEN', 'MESS_MANAGER'));
 
 // ── Rooms & Beds ─────────────────────────────────────────────────
 router.get('/rooms', getErpRooms);
@@ -86,5 +87,8 @@ router.get('/complaints', getAdminComplaints);
 router.get('/complaints/:id', getAdminComplaintById);
 router.patch('/complaints/:id/status', updateComplaintStatus);
 router.post('/complaints/:id/notes', addInternalNote);
+
+// ── Receipt (Bug #5) ──────────────────────────────────────────────
+router.get('/rent/:id/receipt', getRentReceipt);
 
 export default router;

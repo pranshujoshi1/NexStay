@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { User, Mail, Phone, Lock, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 
 export default function ProfilePage() {
-  const { user, token } = useAuth();
+  const { user, accessToken } = useAuth();
   const qc = useQueryClient();
 
   const [editForm, setEditForm] = useState({ name: user?.name ?? '', phone: user?.phone ?? '' });
@@ -18,7 +18,7 @@ export default function ProfilePage() {
   const editMutation = useMutation({
     mutationFn: async (body: typeof editForm) => {
       const { data } = await axios.patch('/api/auth/profile', body, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${accessToken}` },
       });
       return data;
     },
@@ -29,7 +29,7 @@ export default function ProfilePage() {
   const pwMutation = useMutation({
     mutationFn: async (body: { currentPassword: string; newPassword: string }) => {
       const { data } = await axios.patch('/api/auth/password', body, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${accessToken}` },
       });
       return data;
     },

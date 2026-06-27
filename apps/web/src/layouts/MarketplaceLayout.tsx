@@ -1,6 +1,6 @@
 import { Routes, Route, Link, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
-import { Search, Menu, X, Building2, LogIn, LogOut, LayoutDashboard, UserPlus } from 'lucide-react';
+import { Search, Menu, X, Building2, LogIn, LogOut, LayoutDashboard } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Role } from '@/types/shared';
 
@@ -25,9 +25,12 @@ export default function MarketplaceLayout() {
   const handleLogout = () => { logout(); setMenuOpen(false); };
 
   const getDashboardLink = () => {
-    if (user?.role === Role.HOSTEL_ADMIN) return '/admin/dashboard';
-    if (user?.role === Role.SUPER_ADMIN) return '/superadmin/dashboard';
-    return '/account/bookings';
+    if (user?.role === Role.HOSTEL_ADMIN)  return '/admin/dashboard';
+    if (user?.role === Role.SUPER_ADMIN)   return '/superadmin/dashboard';
+    if (user?.role === Role.WARDEN)        return '/warden/dashboard';
+    if (user?.role === Role.MESS_MANAGER)  return '/mess/dashboard';
+    if (user?.role === Role.STUDENT)       return '/student/dashboard';
+    return '/login';
   };
 
   return (
@@ -65,9 +68,6 @@ export default function MarketplaceLayout() {
 
           {/* Desktop nav */}
           <div className="hidden md:flex items-center gap-2 ml-auto">
-            <Link to="/signup?role=HOSTEL_ADMIN" className="text-sm font-medium text-text-secondary hover:text-primary transition-colors px-3 py-1.5">
-              List Your PG
-            </Link>
             {user ? (
               <div className="flex items-center gap-2">
                 <Link to={getDashboardLink()} className="flex items-center gap-2 btn-secondary">
@@ -79,14 +79,9 @@ export default function MarketplaceLayout() {
                 </button>
               </div>
             ) : (
-              <>
-                <Link to="/login" className="btn-ghost flex items-center gap-2">
-                  <LogIn className="w-4 h-4" />Login
-                </Link>
-                <Link to="/signup" className="btn-primary flex items-center gap-2">
-                  <UserPlus className="w-4 h-4" />Sign Up
-                </Link>
-              </>
+              <Link to="/login" className="btn-primary flex items-center gap-2">
+                <LogIn className="w-4 h-4" />Login
+              </Link>
             )}
           </div>
 
@@ -112,9 +107,6 @@ export default function MarketplaceLayout() {
         {/* Mobile menu */}
         {menuOpen && (
           <div className="md:hidden bg-white border-t border-surface-border px-4 py-3 space-y-1 animate-slide-up">
-            <Link to="/signup?role=HOSTEL_ADMIN" className="nav-item" onClick={() => setMenuOpen(false)}>
-              <Building2 className="w-4 h-4" />List Your PG
-            </Link>
             {user ? (
               <>
                 <Link to={getDashboardLink()} className="nav-item" onClick={() => setMenuOpen(false)}>
@@ -125,10 +117,7 @@ export default function MarketplaceLayout() {
                 </button>
               </>
             ) : (
-              <>
-                <Link to="/login" className="nav-item" onClick={() => setMenuOpen(false)}><LogIn className="w-4 h-4" />Login</Link>
-                <Link to="/signup" className="nav-item text-primary font-semibold" onClick={() => setMenuOpen(false)}><UserPlus className="w-4 h-4" />Sign Up</Link>
-              </>
+              <Link to="/login" className="nav-item" onClick={() => setMenuOpen(false)}><LogIn className="w-4 h-4" />Login</Link>
             )}
           </div>
         )}

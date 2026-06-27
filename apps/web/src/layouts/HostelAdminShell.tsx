@@ -3,7 +3,7 @@ import { Routes, Route, NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Building2, BedDouble, Users, BookOpen,
   CreditCard, Receipt, MessageSquare, BarChart3, Settings,
-  Bell, LogOut, Menu, X,
+  LogOut, Menu, X,
   Package, UserCheck, Database
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -51,7 +51,6 @@ const NAV = [
   ]},
   { section: 'SETTINGS', items: [
     { label: 'Profile', icon: Settings, path: '/admin/profile' },
-    { label: 'Notifications', icon: Bell, path: '/admin/notifications' },
     { label: '📬 Mock Emails', icon: Database, path: '/admin/dev/emails' },
   ]},
 ];

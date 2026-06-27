@@ -29,7 +29,7 @@ export default function AuthModal({ onClose, onSuccess, defaultTab = 'login' }: 
     setLoginError('');
     setLoginLoading(true);
     try {
-      await login(loginForm.email, loginForm.password);
+      await login(loginForm.email, loginForm.password, 'HOSTEL_ADMIN');
       onClose();
       onSuccess?.();
     } catch (err: any) {
@@ -41,33 +41,7 @@ export default function AuthModal({ onClose, onSuccess, defaultTab = 'login' }: 
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSignupError('');
-    if (signupForm.password !== signupForm.confirm) {
-      setSignupError('Passwords do not match.');
-      return;
-    }
-    if (signupForm.password.length < 6) {
-      setSignupError('Password must be at least 6 characters.');
-      return;
-    }
-    setSignupLoading(true);
-    try {
-      await axios.post('/api/auth/register', {
-        name: signupForm.name,
-        phone: signupForm.phone,
-        email: signupForm.email,
-        password: signupForm.password,
-        role: 'GUEST',
-      });
-      // Auto-login after signup
-      await login(signupForm.email, signupForm.password);
-      onClose();
-      onSuccess?.();
-    } catch (err: any) {
-      setSignupError(err?.response?.data?.message ?? 'Signup failed. Please try again.');
-    } finally {
-      setSignupLoading(false);
-    }
+    setSignupError('Public signup is disabled. Contact the admin to create an account.');
   };
 
   return (

@@ -1,7 +1,7 @@
 import { Routes, Route, NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Building2, BookOpen, CreditCard,
-  BarChart3, ShieldCheck, LogOut, Bell
+  ShieldCheck, LogOut, Hotel
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
@@ -14,12 +14,14 @@ import SuperUsersPage from '@/pages/superadmin/GuestsPage';
 import SuperPropertiesPage from '@/pages/superadmin/PropertiesVerificationPage';
 import SuperBookingsPage from '@/pages/superadmin/BookingsPage';
 import SuperReportsPage from '@/pages/superadmin/ReportsPage';
+import SuperHostelsPage from '@/pages/superadmin/HostelsPage';
 
 const getInitials = (name: string) => name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
 
 const NAV = [
   { label: 'Dashboard',    icon: LayoutDashboard, path: '/superadmin/dashboard' },
   { label: 'Owner Verify', icon: ShieldCheck,      path: '/superadmin/owners' },
+  { label: 'Hostels',      icon: Hotel,            path: '/superadmin/hostels' },
   { label: 'Users',        icon: Users,            path: '/superadmin/users' },
   { label: 'Properties',   icon: Building2,        path: '/superadmin/properties' },
   { label: 'Bookings',     icon: BookOpen,         path: '/superadmin/bookings' },
@@ -95,6 +97,7 @@ export default function SuperAdminShell() {
           <Routes>
             <Route path="dashboard"  element={<SuperDashboard />} />
             <Route path="owners"     element={<SuperOwnersPage />} />
+            <Route path="hostels"    element={<SuperHostelsPage />} />
             <Route path="users"      element={<SuperUsersPage />} />
             <Route path="properties" element={<SuperPropertiesPage />} />
             <Route path="bookings"   element={<SuperBookingsPage />} />

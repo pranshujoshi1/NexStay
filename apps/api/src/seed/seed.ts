@@ -1,10 +1,10 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 import dotenv from 'dotenv';
-
 dotenv.config();
 
 import { User } from '../models/User.model';
+import { Hostel } from '../models/Hostel.model';
 import { Property } from '../models/Property.model';
 import { Floor } from '../models/Floor.model';
 import { Room } from '../models/Room.model';
@@ -12,379 +12,319 @@ import { Bed } from '../models/Bed.model';
 import { Booking } from '../models/Booking.model';
 import { HostelStudent } from '../models/HostelStudent.model';
 import { RentRecord } from '../models/RentRecord.model';
-import { StudentProfile } from '../models/StudentProfile.model';
+import { Staff } from '../models/Staff.model';
 import { Expense } from '../models/Expense.model';
+import { Inventory } from '../models/Inventory.model';
 import { Complaint } from '../models/Complaint.model';
-import { Notification } from '../models/Notification.model';
 import { Review } from '../models/Review.model';
+import { MessMenu } from '../models/MessMenu.model';
 
-const hash = (p: string) => bcrypt.hash(p, 12);
+const MONGO_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/nexstay';
+const hash = (pw: string) => bcrypt.hash(pw, 12);
+const today = new Date().toISOString().split('T')[0];
+const thisMonth = new Date().toISOString().slice(0, 7);
+const lastMonth = (() => { const d = new Date(); d.setMonth(d.getMonth() - 1); return d.toISOString().slice(0, 7); })();
 
-const PG_DATA = [
-  { name: 'Sunrise Boys PG', address: '14, Koregaon Park', locality: 'Koregaon Park', city: 'Pune', state: 'Maharashtra', pincode: '411001', amenities: ['WIFI', 'FOOD', 'LAUNDRY', 'CCTV', 'PARKING'], gender: 'BOYS', rentStartingFrom: 7000, rating: 4.5, latitude: 18.5362, longitude: 73.8939 },
-  { name: 'Green Valley Residency', address: '7, Baner Road', locality: 'Baner', city: 'Pune', state: 'Maharashtra', pincode: '411045', amenities: ['WIFI', 'AC', 'CCTV', 'WATER'], gender: 'CO_ED', rentStartingFrom: 8500, rating: 4.1, latitude: 18.5590, longitude: 73.7868 },
-  { name: 'Comfort Stay Hostel', address: '22, Koramangala', locality: 'Koramangala', city: 'Bangalore', state: 'Karnataka', pincode: '560034', amenities: ['WIFI', 'FOOD', 'LAUNDRY', 'CCTV'], gender: 'GIRLS', rentStartingFrom: 9000, rating: 4.7, latitude: 12.9352, longitude: 77.6245 },
-  { name: 'Namma PG', address: '5, HSR Layout', locality: 'HSR Layout', city: 'Bangalore', state: 'Karnataka', pincode: '560102', amenities: ['WIFI', 'LAUNDRY', 'WATER', 'POWER_BACKUP'], gender: 'BOYS', rentStartingFrom: 6500, rating: 3.9, latitude: 12.9116, longitude: 77.6389 },
-  { name: 'Central PG House', address: '3, Vijay Nagar', locality: 'Vijay Nagar', city: 'Indore', state: 'Madhya Pradesh', pincode: '452010', amenities: ['WIFI', 'FOOD', 'CCTV', 'PARKING'], gender: 'CO_ED', rentStartingFrom: 5500, rating: 4.3, latitude: 22.7534, longitude: 75.8839 },
-  { name: 'Shree Sai PG', address: '11, Napier Town', locality: 'Napier Town', city: 'Jabalpur', state: 'Madhya Pradesh', pincode: '482001', amenities: ['WIFI', 'FOOD', 'LAUNDRY'], gender: 'GIRLS', rentStartingFrom: 4500, rating: 4.0, latitude: 23.1815, longitude: 79.9864 },
+const IMAGES = [
+  'https://images.unsplash.com/photo-1555854877-bab0e564b8d5?w=800',
+  'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=800',
+  'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=800',
+  'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=800',
 ];
 
-const ROOM_TYPES = ['SINGLE', 'DOUBLE', 'TRIPLE', 'FOUR_SHARING'] as const;
-const BED_STATUSES = ['AVAILABLE', 'OCCUPIED', 'RESERVED'] as const;
-const BOOKING_STATUSES = ['PENDING', 'CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT', 'CANCELLED'] as const;
-const RENT_STATUSES = ['PAID', 'UNPAID', 'PARTIAL'] as const;
-const EXPENSE_CATS = ['ELECTRICITY', 'WATER', 'STAFF_SALARY', 'MAINTENANCE', 'MISC'] as const;
-const COMPLAINT_CATS = ['ELECTRICITY', 'FOOD', 'INTERNET', 'WATER', 'CLEANING'] as const;
-const COMPLAINT_STATUSES = ['OPEN', 'IN_PROGRESS', 'RESOLVED'] as const;
-
 async function seed() {
-  const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017/nexstay';
-  await mongoose.connect(uri);
-  console.log('✅ Connected to MongoDB');
+  await mongoose.connect(MONGO_URI);
+  console.log('🔌 Connected to MongoDB');
 
-  // Clear all collections
+  // ── Wipe ──────────────────────────────────────────────────────────────────
   await Promise.all([
-    User.deleteMany({}), Property.deleteMany({}), Floor.deleteMany({}),
-    Room.deleteMany({}), Bed.deleteMany({}),
+    User.deleteMany({}), Hostel.deleteMany({}), Property.deleteMany({}),
+    Floor.deleteMany({}), Room.deleteMany({}), Bed.deleteMany({}),
     Booking.deleteMany({}), HostelStudent.deleteMany({}), RentRecord.deleteMany({}),
-    StudentProfile.deleteMany({}),
-    Expense.deleteMany({}), Complaint.deleteMany({}), Notification.deleteMany({}),
-    Review.deleteMany({}),
+    Staff.deleteMany({}), Expense.deleteMany({}), Inventory.deleteMany({}),
+    Complaint.deleteMany({}), Review.deleteMany({}), MessMenu.deleteMany({}),
   ]);
-  console.log('🗑️  Cleared all collections');
+  console.log('🗑️  Wiped all collections');
 
-  // ── 1. Super Admin ──────────────────────────────────────────────────────────
-  const adminPw = await hash('SuperAdmin@123');
-  const admin = await User.create({
-    name: 'Rahul Sharma', email: 'superadmin@nexstay.in', phone: '9000000001',
-    passwordHash: adminPw, role: 'SUPER_ADMIN', status: 'ACTIVE', isVerified: true,
+  // ── SuperAdmin ────────────────────────────────────────────────────────────
+  const superAdmin = await User.create({
+    name: 'Super Admin', email: 'admin@nexstay.in', phone: '9999900000',
+    passwordHash: await hash('admin123'), role: 'SUPER_ADMIN', status: 'ACTIVE',
   });
-  console.log('👤 Super Admin created');
 
-  // ── 2. PG Owners ────────────────────────────────────────────────────────────
-  const ownerPw = await hash('Owner@123');
-  const owners = await User.insertMany([
-    { name: 'Vikram Patel', email: 'owner1@nexstay.in', phone: '9000000002', passwordHash: ownerPw, role: 'HOSTEL_ADMIN', status: 'ACTIVE', isVerified: true, ownerVerificationStatus: 'APPROVED' },
-    { name: 'Sunita Desai', email: 'owner2@nexstay.in', phone: '9000000003', passwordHash: ownerPw, role: 'HOSTEL_ADMIN', status: 'ACTIVE', isVerified: true, ownerVerificationStatus: 'APPROVED' },
-    { name: 'Ramesh Gupta', email: 'owner3@nexstay.in', phone: '9000000004', passwordHash: ownerPw, role: 'HOSTEL_ADMIN', status: 'ACTIVE', isVerified: true, ownerVerificationStatus: 'APPROVED' },
-    { name: 'Pending Owner', email: 'owner_pending@nexstay.in', phone: '9000000009', passwordHash: ownerPw, role: 'HOSTEL_ADMIN', status: 'ACTIVE', isVerified: true, ownerVerificationStatus: 'PENDING', businessName: 'NexStay Residences Ltd', gstNumber: '27AAAAA1111A1Z1' },
-  ]);
-  console.log('👤 4 PG Owners created (including 1 PENDING verification)');
- 
-  // ── 3. Property Manager ─────────────────────────────────────────────────────
-  const managerPw = await hash('Manager@123');
-  const manager = await User.create({
-    name: 'Priya Singh', email: 'manager1@nexstay.in', phone: '9000000005',
-    passwordHash: managerPw, role: 'HOSTEL_ADMIN', status: 'ACTIVE',
+  // ── Owner 1 ───────────────────────────────────────────────────────────────
+  const owner1 = await User.create({
+    name: 'Rajesh Sharma', email: 'rajesh@nexstay.in', phone: '9876543210',
+    passwordHash: await hash('owner123'), role: 'HOSTEL_ADMIN', status: 'ACTIVE',
+    businessName: 'Sharma Hostels Pvt. Ltd.', ownerVerificationStatus: 'APPROVED',
   });
-  console.log('👤 Property Manager created');
- 
-  // ── 4. Properties ────────────────────────────────────────────────────────────
-  const propertiesToInsert = PG_DATA.map((pg, i) => ({
-    ...pg,
-    tenantId: owners[Math.floor(i / 2)]._id,
-    description: `${pg.name} is a well-maintained PG in ${pg.city}, offering modern amenities including high-speed WiFi, hygienic meals, and 24/7 security. Ideal for students and working professionals.`,
-    images: [],
-    isActive: true,
-    isPaused: false,
-    verificationStatus: 'APPROVED',
-  }));
 
-  // Add pending properties for admin verification manual testing
-  propertiesToInsert.push({
-    name: 'Pending Grand Mansion',
-    address: '42, Viman Nagar',
-    locality: 'Viman Nagar',
-    city: 'Pune',
-    state: 'Maharashtra',
-    pincode: '411014',
-    amenities: ['WIFI', 'AC', 'CCTV'],
-    gender: 'CO_ED',
-    rentStartingFrom: 12000,
-    rating: 0,
-    tenantId: owners[0]._id,
-    description: 'A luxurious mansion pending approval. Contains premium single and double rooms.',
-    images: [],
-    isActive: true,
-    isPaused: false,
-    verificationStatus: 'PENDING',
-    rejectionReason: '',
-  } as any);
+  // ── Owner 2 ───────────────────────────────────────────────────────────────
+  const owner2 = await User.create({
+    name: 'Priya Mehta', email: 'priya@nexstay.in', phone: '9876543211',
+    passwordHash: await hash('owner123'), role: 'HOSTEL_ADMIN', status: 'ACTIVE',
+    businessName: 'Mehta PG Services', ownerVerificationStatus: 'APPROVED',
+  });
 
-  propertiesToInsert.push({
-    name: 'Pending Cozy Nest',
-    address: '10, Koramangala 4th Block',
-    locality: 'Koramangala',
-    city: 'Bangalore',
-    state: 'Karnataka',
-    pincode: '560034',
-    amenities: ['WIFI', 'FOOD'],
-    gender: 'GIRLS',
-    rentStartingFrom: 9500,
-    rating: 0,
-    tenantId: owners[1]._id,
-    description: 'Cozy girls PG pending admin review.',
-    images: [],
-    isActive: true,
-    isPaused: false,
-    verificationStatus: 'PENDING',
-    rejectionReason: '',
-  } as any);
+  // ── Properties ────────────────────────────────────────────────────────────
+  const prop1 = await Property.create({
+    tenantId: owner1._id, name: 'Sharma Boys Hostel', description: 'Premium boys hostel near Pune University with all amenities.',
+    address: '12, Model Colony', city: 'Pune', state: 'Maharashtra', pincode: '411016',
+    gender: 'BOYS', amenities: ['WiFi', 'AC', 'Laundry', 'Mess', 'CCTV', 'Parking'],
+    foodIncluded: true, images: IMAGES, verificationStatus: 'APPROVED',
+    isActive: true, isPaused: false, rating: 4.5, reviewCount: 3, rentStartingFrom: 8000,
+  });
 
-  const properties = await Property.insertMany(propertiesToInsert);
-  console.log('🏠 8 Properties created (6 APPROVED, 2 PENDING)');
+  const prop2 = await Property.create({
+    tenantId: owner1._id, name: 'Sharma Girls PG', description: 'Safe and comfortable girls PG in Kothrud.',
+    address: '45, Paud Road', city: 'Pune', state: 'Maharashtra', pincode: '411038',
+    gender: 'GIRLS', amenities: ['WiFi', 'CCTV', 'Security', 'Mess', 'RO Water'],
+    foodIncluded: true, images: IMAGES, verificationStatus: 'APPROVED',
+    isActive: true, isPaused: false, rating: 4.2, reviewCount: 2, rentStartingFrom: 7500,
+  });
 
-  // ── 5. Floors, Rooms, Beds ───────────────────────────────────────────────────
-  const allBeds: mongoose.Document[] = [];
-  const allRooms: mongoose.Document[] = [];
+  const prop3 = await Property.create({
+    tenantId: owner2._id, name: 'Mehta Co-ed Residency', description: 'Modern co-ed PG with premium facilities.',
+    address: '78, Viman Nagar', city: 'Pune', state: 'Maharashtra', pincode: '411014',
+    gender: 'CO_ED', amenities: ['WiFi', 'AC', 'Gym', 'Cafeteria', 'Housekeeping'],
+    foodIncluded: false, images: IMAGES, verificationStatus: 'APPROVED',
+    isActive: true, isPaused: false, rating: 4.7, reviewCount: 1, rentStartingFrom: 10000,
+  });
 
-  for (const property of properties) {
-    const floors = await Floor.insertMany([
-      { tenantId: (property as any).tenantId, propertyId: property._id, name: 'Ground Floor', order: 0 },
-      { tenantId: (property as any).tenantId, propertyId: property._id, name: 'First Floor', order: 1 },
-    ]);
+  // ── Hostels ───────────────────────────────────────────────────────────────
+  const hostel1 = await Hostel.create({
+    hostelCode: 'NST-001', name: 'Sharma Boys Hostel', ownerId: owner1._id,
+    propertyId: prop1._id, gender: 'BOYS', isActive: true, messEnabled: true,
+    address: { street: '12, Model Colony', city: 'Pune', state: 'Maharashtra', pincode: '411016' },
+    contactPhone: '9876543210', contactEmail: 'rajesh@nexstay.in',
+    messTimings: { breakfast: '7:30 AM - 9:00 AM', lunch: '12:30 PM - 2:00 PM', dinner: '7:30 PM - 9:00 PM' },
+  });
 
-    for (let fi = 0; fi < floors.length; fi++) {
-      const floor = floors[fi];
-      const roomType = ROOM_TYPES[(fi) % ROOM_TYPES.length];
-      const capacity = roomType === 'SINGLE' ? 1 : roomType === 'DOUBLE' ? 2 : roomType === 'TRIPLE' ? 3 : 4;
+  const hostel2 = await Hostel.create({
+    hostelCode: 'NST-002', name: 'Sharma Girls PG', ownerId: owner1._id,
+    propertyId: prop2._id, gender: 'GIRLS', isActive: true, messEnabled: true,
+    address: { street: '45, Paud Road', city: 'Pune', state: 'Maharashtra', pincode: '411038' },
+    contactPhone: '9876543210', contactEmail: 'rajesh@nexstay.in',
+  });
 
-      for (let ri = 1; ri <= 3; ri++) {
-        const room = await Room.create({
-          tenantId: (property as any).tenantId,
-          propertyId: property._id,
-          floorId: floor._id,
-          roomNumber: `${fi + 1}0${ri}`,
-          capacity,
-          roomType,
-          status: 'AVAILABLE',
-          pricePerBed: (property as any).rentStartingFrom || 6000,
-        });
-        allRooms.push(room);
+  const hostel3 = await Hostel.create({
+    hostelCode: 'NST-003', name: 'Mehta Co-ed Residency', ownerId: owner2._id,
+    propertyId: prop3._id, gender: 'CO_ED', isActive: true, messEnabled: false,
+    address: { street: '78, Viman Nagar', city: 'Pune', state: 'Maharashtra', pincode: '411014' },
+  });
 
-        for (let bi = 1; bi <= capacity; bi++) {
-          const bedStatus = bi === 1 ? 'AVAILABLE' : BED_STATUSES[Math.floor(Math.random() * BED_STATUSES.length)];
-          const bed = await Bed.create({
-            tenantId: (property as any).tenantId,
-            propertyId: property._id,
-            roomId: room._id,
-            bedNumber: `B${bi}`,
-            status: bedStatus,
-          });
-          allBeds.push(bed);
-        }
-      }
+  // ── Staff Users for NST-001 ───────────────────────────────────────────────
+  const warden1 = await User.create({
+    name: 'Amit Verma', email: 'warden@nexstay.in', phone: '9123456781',
+    passwordHash: await hash('warden123'), role: 'WARDEN', status: 'ACTIVE',
+    hostelId: hostel1._id,
+    staffPermissions: {
+      canViewStudents: true, canManageComplaints: true, canManageRooms: true,
+      canViewRentRecords: true, canViewSalary: true, canUploadMenu: false, canViewAttendance: true,
+    },
+  });
+
+  const mess1 = await User.create({
+    name: 'Sunita Devi', email: 'mess@nexstay.in', phone: '9123456782',
+    passwordHash: await hash('mess123'), role: 'MESS_MANAGER', status: 'ACTIVE',
+    hostelId: hostel1._id,
+    staffPermissions: {
+      canUploadMenu: true, canViewSalary: true, canViewStudents: false,
+      canManageComplaints: false, canViewRentRecords: false, canManageRooms: false, canViewAttendance: false,
+    },
+  });
+
+  // ── Floors, Rooms, Beds for Property 1 (NST-001) ────────────────────────
+  const floor1 = await Floor.create({ tenantId: owner1._id, hostelId: hostel1._id, propertyId: prop1._id, name: 'Ground Floor', order: 0 });
+  const floor2 = await Floor.create({ tenantId: owner1._id, hostelId: hostel1._id, propertyId: prop1._id, name: 'First Floor', order: 1 });
+
+  const rooms: any[] = [];
+  // Ground floor: 2 double rooms
+  for (let i = 1; i <= 2; i++) {
+    const r = await Room.create({ tenantId: owner1._id, hostelId: hostel1._id, propertyId: prop1._id, floorId: floor1._id, roomNumber: `G0${i}`, capacity: 2, roomType: 'DOUBLE', status: 'AVAILABLE', pricePerBed: 8000 });
+    rooms.push(r);
+  }
+  // First floor: 2 triple rooms
+  for (let i = 1; i <= 2; i++) {
+    const r = await Room.create({ tenantId: owner1._id, hostelId: hostel1._id, propertyId: prop1._id, floorId: floor2._id, roomNumber: `F0${i}`, capacity: 3, roomType: 'TRIPLE', status: 'AVAILABLE', pricePerBed: 7000 });
+    rooms.push(r);
+  }
+
+  // Create beds for all rooms
+  const allBeds: any[] = [];
+  for (const room of rooms) {
+    for (let b = 1; b <= room.capacity; b++) {
+      const bed = await Bed.create({ tenantId: owner1._id, hostelId: hostel1._id, propertyId: prop1._id, roomId: room._id, bedNumber: `B${b}`, status: 'AVAILABLE' });
+      allBeds.push(bed);
     }
   }
-  console.log(`🛏️  Floors, Rooms & Beds created`);
 
-  // ── 6. Students ──────────────────────────────────────────────────────────────
-  const studentPw = await hash('Student@123');
-  const studentNames = [
-    'Arjun Kumar', 'Sneha Joshi', 'Rohan Mehta', 'Pooja Sharma', 'Amit Verma',
-    'Kavya Nair', 'Deepak Singh', 'Anjali Gupta', 'Vikas Yadav', 'Priyanka Tiwari',
-    'Manish Pandey', 'Richa Dubey', 'Suresh Patel', 'Neha Agarwal', 'Rahul Rao',
+  // ── Students (STUDENT role) for NST-001 ──────────────────────────────────
+  const studentData = [
+    { name: 'Arjun Kapoor',   mobile: '9000000001', email: 'arjun@gmail.com' },
+    { name: 'Rahul Gupta',    mobile: '9000000002', email: 'rahul@gmail.com' },
+    { name: 'Vivek Tiwari',   mobile: '9000000003', email: 'vivek@gmail.com' },
+    { name: 'Mohit Singh',    mobile: '9000000004', email: 'mohit@gmail.com' },
+    { name: 'Nikhil Joshi',   mobile: '9000000005', email: 'nikhil@gmail.com' },
   ];
 
-  const students = await User.insertMany(
-    studentNames.map((name, i) => ({
-      name, email: `student${i + 1}@nexstay.in`, phone: `90${String(i + 1).padStart(8, '0')}`,
-      passwordHash: studentPw, role: 'GUEST', status: 'ACTIVE',
-    }))
-  );
-  console.log('👨‍🎓 15 Students created');
-
-  // ── 7. Student Profiles (skip Bookings/RentRecords — schema mismatch, not needed for Phase 1) ──
-  for (let i = 0; i < students.length; i++) {
-    await StudentProfile.create({
-      userId: students[i]._id,
-      guardianName: `Guardian of ${students[i].name}`,
-      guardianPhone: `91${String(i).padStart(8, '1')}`,
-      documents: { aadhaar: `ADH${i + 100}`, studentId: `STU${i + 200}`, photo: '' },
+  const studentUsers: any[] = [];
+  for (const s of studentData) {
+    const u = await User.create({
+      name: s.name, email: s.email, phone: s.mobile,
+      passwordHash: await hash(s.mobile.slice(-4)),
+      role: 'STUDENT', studentId: s.mobile,
+      hostelId: hostel1._id, status: 'ACTIVE',
     });
+    studentUsers.push(u);
   }
-  console.log('📋 Student Profiles created (Bookings/RentRecords skipped for Phase 1)');
 
-  // ── 8. Complaints ────────────────────────────────────────────────────────────
-  const complaintData = [
-    { title: 'No electricity in room', description: 'Power outage since morning in room 101.', category: 'ELECTRICITY' },
-    { title: 'WiFi not working', description: 'Internet down for 2 days.', category: 'INTERNET' },
-    { title: 'Water not coming', description: 'No water supply in morning hours.', category: 'WATER' },
-    { title: 'Room not cleaned', description: 'Room was not cleaned for 3 days.', category: 'CLEANING' },
-    { title: 'Food quality poor', description: 'Dinner was stale yesterday.', category: 'FOOD' },
-    { title: 'AC not working', description: 'Air conditioner stopped working.', category: 'ELECTRICITY' },
-  ];
+  // ── Bookings + HostelStudents for NST-001 students ───────────────────────
+  const admDate = new Date('2026-01-01');
+  const hostelStudents: any[] = [];
+  for (let i = 0; i < studentUsers.length; i++) {
+    const su = studentUsers[i];
+    const bed = allBeds[i];
+    const room = rooms.find(r => String(r._id) === String(bed.roomId));
 
-  for (let i = 0; i < complaintData.length; i++) {
-    const property = properties[i % properties.length];
-    const student = students[i % students.length];
-    await Complaint.create({
-      tenantId: (property as any).tenantId,
-      guestId: student._id,
-      propertyId: property._id,
-      ...complaintData[i],
-      status: COMPLAINT_STATUSES[i % COMPLAINT_STATUSES.length],
-    });
-  }
-  console.log('📢 Complaints created');
-
-  // ── 9.5 Reviews ──────────────────────────────────────────────────────────────
-  const reviewData = [
-    { rating: 5, comment: 'Excellent facilities! WiFi is super fast and food quality is outstanding. Very safe locality.' },
-    { rating: 4, comment: 'Good hostel overall. Clean rooms and helpful staff. Could use faster maintenance response.' },
-    { rating: 5, comment: 'Best PG I have stayed at! The mess food is homely and other tenants are very friendly.' },
-    { rating: 3, comment: 'Decent place. Location is convenient for college commute. Maintenance could be faster.' },
-    { rating: 4, comment: 'Well maintained and secure. Management is responsive. Recommended for girls.' },
-    { rating: 5, comment: 'Premium quality living at affordable prices. Great food and excellent security.' },
-  ];
-  for (let i = 0; i < properties.length; i++) {
-    for (let j = 0; j < 3; j++) {
-      await Review.create({
-        propertyId: properties[i]._id,
-        guestId: students[(i * 3 + j) % students.length]._id,
-        rating: reviewData[(i + j) % reviewData.length].rating,
-        comment: reviewData[(i + j) % reviewData.length].comment,
-        createdAt: new Date(Date.now() - (j * 20 + i * 5) * 24 * 60 * 60 * 1000),
-      });
-    }
-  }
-  console.log('⭐ Reviews seeded');
-
-  // ── 9. Expenses ───────────────────────────────────────────────────────────────
-  const EXPENSE_CATS_VALID = ['ELECTRICITY', 'WATER', 'STAFF_SALARY', 'MAINTENANCE', 'INTERNET'] as const;
-  for (const property of properties.filter((p: any) => p.verificationStatus === 'APPROVED')) {
-    for (let i = 0; i < EXPENSE_CATS_VALID.length; i++) {
-      await Expense.create({
-        tenantId: (property as any).tenantId,
-        propertyId: property._id,
-        category: EXPENSE_CATS_VALID[i],
-        amount: 2000 + Math.floor(Math.random() * 8000),
-        date: new Date(Date.now() - i * 7 * 24 * 60 * 60 * 1000),
-        description: `Monthly ${EXPENSE_CATS_VALID[i].toLowerCase()} expense`,
-      });
-    }
-  }
-  console.log('💰 Expenses created');
-
-  // ── 10. Notifications ─────────────────────────────────────────────────────────
-  await Notification.insertMany([
-    { userId: admin._id, type: 'SYSTEM', title: 'Welcome to NexStay', message: 'Admin panel is ready.', channel: 'IN_APP', isRead: false },
-    { userId: owners[0]._id, type: 'BOOKING', title: 'New Booking Request', message: 'You have a new booking from Arjun Kumar.', channel: 'IN_APP', isRead: false },
-    { userId: students[0]._id, type: 'RENT', title: 'Rent Due Reminder', message: 'Your rent of ₹7000 is due in 3 days.', channel: 'IN_APP', isRead: true },
-  ]);
-  console.log('🔔 Notifications created');
-
-  console.log('\n✅ SEED COMPLETE!\n');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log('  CREDENTIALS:');
-  console.log('  Super Admin  → superadmin@nexstay.in / SuperAdmin@123');
-  console.log('  PG Owner 1   → owner1@nexstay.in    / Owner@123  (2 props, Pune)');
-  console.log('  PG Owner 2   → owner2@nexstay.in    / Owner@123  (1 prop, Bangalore)');
-  console.log('  PG Owner 3   → owner3@nexstay.in    / Owner@123  (2 props, Indore)');
-  console.log('  Manager      → manager1@nexstay.in  / Manager@123');
-  console.log('  Student 1    → student1@nexstay.in  / Student@123 (CHECKED_IN at Sunrise Boys PG)');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-
-
-  // ── PHASE 4: Bookings, HostelStudents, RentRecords ───────────────────────────
-  // Pick first approved property owned by owner1
-  const p4Prop = properties.find((p: any) => p.tenantId.toString() === owners[0]._id.toString() && p.verificationStatus === 'APPROVED')!;
-  const p4Beds = allBeds.filter((b: any) => b.propertyId.toString() === p4Prop._id.toString());
-  const p4AvailBeds = p4Beds.filter((b: any) => b.status === 'AVAILABLE');
-
-  const ym = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-  const now = new Date();
-
-  // --- 2 CONFIRMED bookings (ready for check-in)
-  const confirmedBookingData = [
-    { guestIdx: 0, bedIdx: 0 },
-    { guestIdx: 1, bedIdx: 1 },
-  ];
-  const confirmedBookings: any[] = [];
-  for (const { guestIdx, bedIdx } of confirmedBookingData) {
-    if (!p4AvailBeds[bedIdx]) continue;
-    const bed = p4AvailBeds[bedIdx] as any;
-    const room = allRooms.find((r: any) => r._id.toString() === bed.roomId.toString()) as any;
-    const b = await Booking.create({
-      guestId: students[guestIdx]._id, tenantId: owners[0]._id,
-      propertyId: p4Prop._id, roomId: room._id, bedId: bed._id,
-      status: 'CONFIRMED', monthlyRent: (p4Prop as any).rentStartingFrom || 7000,
-      aadhaarUrl: 'https://placeholder.co/300x200?text=Aadhaar',
-      studentIdUrl: 'https://placeholder.co/300x200?text=StudentID',
-      photoUrl: 'https://placeholder.co/300x200?text=Photo',
-      documentsVerified: false, advancePaid: 2000,
-    });
-    // Mark bed RESERVED
-    await Bed.findByIdAndUpdate(bed._id, { status: 'RESERVED', currentBookingId: b._id });
-    confirmedBookings.push(b);
-  }
-  console.log('📋 2 CONFIRMED bookings created (for check-in testing)');
-
-  // --- 3 CHECKED_IN students (student1=Arjun Kumar at idx 0, student2=Sneha Joshi at idx 1)
-  const checkinData = [
-    { guestIdx: 0, bedIdx: 2, monthsBack: 3, rentStatus: ['PAID','PAID','UNPAID'] },
-    { guestIdx: 1, bedIdx: 3, monthsBack: 2, rentStatus: ['PAID','PARTIAL'] },
-    { guestIdx: 4, bedIdx: 4, monthsBack: 1, rentStatus: ['UNPAID'] },
-  ];
-  for (const { guestIdx, bedIdx, monthsBack, rentStatus } of checkinData) {
-    if (!p4AvailBeds[bedIdx]) continue;
-    const bed = p4AvailBeds[bedIdx] as any;
-    const room = allRooms.find((r: any) => r._id.toString() === bed.roomId.toString()) as any;
-    const moveIn = new Date(now);
-    moveIn.setMonth(moveIn.getMonth() - monthsBack);
+    // Mark bed occupied
+    await Bed.findByIdAndUpdate(bed._id, { status: 'OCCUPIED' });
 
     const booking = await Booking.create({
-      guestId: students[guestIdx]._id, tenantId: owners[0]._id,
-      propertyId: p4Prop._id, roomId: room._id, bedId: bed._id,
-      status: 'CHECKED_IN', checkInDate: moveIn,
-      monthlyRent: (p4Prop as any).rentStartingFrom || 7000,
-      aadhaarUrl: 'https://placeholder.co/300x200?text=Aadhaar',
-      studentIdUrl: 'https://placeholder.co/300x200?text=StudentID',
-      photoUrl: 'https://placeholder.co/300x200?text=Photo',
-      documentsVerified: true, advancePaid: 5000,
+      guestId: su._id, tenantId: owner1._id, hostelId: hostel1._id,
+      propertyId: prop1._id, roomId: room._id, bedId: bed._id,
+      status: 'CHECKED_IN', checkInDate: admDate,
+      monthlyRent: room.pricePerBed, advancePaid: room.pricePerBed,
+      documentsVerified: true,
     });
 
-    const student = await HostelStudent.create({
-      tenantId: owners[0]._id, propertyId: p4Prop._id,
-      bookingId: booking._id, guestId: students[guestIdx]._id, bedId: bed._id,
-      name: students[guestIdx].name, phone: students[guestIdx].phone, email: students[guestIdx].email,
-      college: 'NexStay University', guardianName: `Guardian of ${students[guestIdx].name}`, guardianPhone: '9000099999',
-      aadhaarUrl: 'https://placeholder.co/300x200?text=Aadhaar',
-      studentIdUrl: 'https://placeholder.co/300x200?text=StudentID',
-      photoUrl: 'https://placeholder.co/300x200?text=Photo',
-      admissionDate: moveIn,
-      noticePeriodDate: new Date(moveIn.getTime() + 30 * 24 * 60 * 60 * 1000),
-      monthlyRent: (p4Prop as any).rentStartingFrom || 7000,
-      securityDeposit: 5000, status: 'ACTIVE',
+    const hs = await HostelStudent.create({
+      tenantId: owner1._id, hostelId: hostel1._id, propertyId: prop1._id,
+      bookingId: booking._id, guestId: su._id, bedId: bed._id,
+      name: su.name, phone: su.phone, email: su.email,
+      admissionDate: admDate, monthlyRent: room.pricePerBed, securityDeposit: room.pricePerBed,
+      status: 'ACTIVE',
     });
-
-    await Bed.findByIdAndUpdate(bed._id, { status: 'OCCUPIED', currentBookingId: booking._id });
-    await Room.findByIdAndUpdate(room._id, { status: 'FULL' });
-
-    // Rent records
-    for (let m = 0; m < rentStatus.length; m++) {
-      const rDate = new Date(moveIn);
-      rDate.setMonth(rDate.getMonth() + m);
-      const st = rentStatus[m];
-      const amount = (p4Prop as any).rentStartingFrom || 7000;
-      const paid = st === 'PAID' ? amount : st === 'PARTIAL' ? Math.round(amount * 0.5) : 0;
-      await RentRecord.create({
-        tenantId: owners[0]._id, propertyId: p4Prop._id, roomId: room._id,
-        hostelStudentId: student._id, bookingId: booking._id,
-        month: ym(rDate), amount, paidAmount: paid, fine: 0,
-        dueDate: new Date(rDate.getFullYear(), rDate.getMonth() + 1, 5),
-        status: st, paidAt: st === 'PAID' ? new Date(rDate.getFullYear(), rDate.getMonth() + 1, 3) : undefined,
-      });
-    }
+    hostelStudents.push(hs);
   }
-  console.log('👥 3 CHECKED_IN HostelStudents created with rent records');
+
+  // ── Rent Records ──────────────────────────────────────────────────────────
+  for (const hs of hostelStudents) {
+    // Last month — PAID
+    await RentRecord.create({
+      tenantId: owner1._id, hostelId: hostel1._id, propertyId: prop1._id,
+      hostelStudentId: hs._id, bookingId: hs.bookingId,
+      month: lastMonth, amount: hs.monthlyRent, paidAmount: hs.monthlyRent,
+      fine: 0, dueDate: new Date(`${lastMonth}-05`), status: 'PAID',
+      paidAt: new Date(), paymentMethod: 'UPI',
+    });
+    // This month — UNPAID for first 2, PAID for rest
+    const isPaid = hostelStudents.indexOf(hs) >= 2;
+    await RentRecord.create({
+      tenantId: owner1._id, hostelId: hostel1._id, propertyId: prop1._id,
+      hostelStudentId: hs._id, bookingId: hs.bookingId,
+      month: thisMonth, amount: hs.monthlyRent, paidAmount: isPaid ? hs.monthlyRent : 0,
+      fine: 0, dueDate: new Date(`${thisMonth}-05`),
+      status: isPaid ? 'PAID' : 'UNPAID',
+      ...(isPaid && { paidAt: new Date(), paymentMethod: 'Cash' }),
+    });
+  }
+
+  // ── ERP Staff for NST-001 ─────────────────────────────────────────────────
+  await Staff.create([
+    { tenantId: owner1._id, hostelId: hostel1._id, propertyId: prop1._id, name: 'Amit Verma', phone: '9123456781', role: 'WARDEN', salary: 25000, joiningDate: new Date('2025-01-01'), isActive: true },
+    { tenantId: owner1._id, hostelId: hostel1._id, propertyId: prop1._id, name: 'Sunita Devi', phone: '9123456782', role: 'COOK', salary: 18000, joiningDate: new Date('2025-01-01'), isActive: true },
+    { tenantId: owner1._id, hostelId: hostel1._id, propertyId: prop1._id, name: 'Ramesh Kumar', phone: '9123456783', role: 'CLEANER', salary: 12000, joiningDate: new Date('2025-02-01'), isActive: true },
+  ]);
+
+  // ── Expenses ─────────────────────────────────────────────────────────────
+  await Expense.create([
+    { tenantId: owner1._id, hostelId: hostel1._id, propertyId: prop1._id, category: 'ELECTRICITY', amount: 8500, date: `${thisMonth}-01`, description: 'Monthly electricity bill' },
+    { tenantId: owner1._id, hostelId: hostel1._id, propertyId: prop1._id, category: 'STAFF_SALARY', amount: 55000, date: `${lastMonth}-30`, description: 'Staff salary — Amit Verma, Sunita Devi, Ramesh Kumar' },
+    { tenantId: owner1._id, hostelId: hostel1._id, propertyId: prop1._id, category: 'INTERNET', amount: 2000, date: `${thisMonth}-01`, description: 'Monthly internet bill' },
+    { tenantId: owner1._id, hostelId: hostel1._id, propertyId: prop1._id, category: 'MAINTENANCE', amount: 3500, date: `${thisMonth}-10`, description: 'Plumbing repair' },
+  ]);
+
+  // ── Inventory ─────────────────────────────────────────────────────────────
+  await Inventory.create([
+    { tenantId: owner1._id, propertyId: prop1._id, itemName: 'Ceiling Fans', totalCount: 12, workingCount: 11, damagedCount: 1 },
+    { tenantId: owner1._id, propertyId: prop1._id, itemName: 'Mattresses', totalCount: 10, workingCount: 10, damagedCount: 0 },
+    { tenantId: owner1._id, propertyId: prop1._id, itemName: 'Study Tables', totalCount: 10, workingCount: 9, damagedCount: 1 },
+    { tenantId: owner1._id, propertyId: prop1._id, itemName: 'CCTV Cameras', totalCount: 6, workingCount: 6, damagedCount: 0 },
+  ]);
+
+  // ── Complaints ────────────────────────────────────────────────────────────
+  await Complaint.create([
+    {
+      tenantId: owner1._id, hostelId: hostel1._id, propertyId: prop1._id,
+      guestId: studentUsers[0]._id, hostelStudentId: hostelStudents[0]._id,
+      title: 'WiFi not working in room G01', category: 'INTERNET', description: 'Internet has been down since yesterday evening.',
+      status: 'OPEN', statusHistory: [{ status: 'OPEN', note: 'Reported by student', changedBy: 'Student', changedAt: new Date() }],
+    },
+    {
+      tenantId: owner1._id, hostelId: hostel1._id, propertyId: prop1._id,
+      guestId: studentUsers[1]._id, hostelStudentId: hostelStudents[1]._id,
+      title: 'Tap leaking in bathroom', category: 'WATER', description: 'There is a leaking tap in the shared bathroom on ground floor.',
+      status: 'IN_PROGRESS', statusHistory: [
+        { status: 'OPEN', note: 'Reported', changedBy: 'Student', changedAt: new Date(Date.now() - 86400000) },
+        { status: 'IN_PROGRESS', note: 'Plumber called', changedBy: 'Warden', changedAt: new Date() },
+      ],
+    },
+    {
+      tenantId: owner1._id, hostelId: hostel1._id, propertyId: prop1._id,
+      guestId: studentUsers[2]._id, hostelStudentId: hostelStudents[2]._id,
+      title: 'Food quality issue', category: 'FOOD', description: 'Dinner was not properly cooked yesterday.',
+      status: 'RESOLVED', resolvedAt: new Date(),
+      statusHistory: [{ status: 'RESOLVED', note: 'Issue addressed with mess staff', changedBy: 'Warden', changedAt: new Date() }],
+    },
+  ]);
+
+  // ── Reviews ───────────────────────────────────────────────────────────────
+  await Review.create([
+    { propertyId: prop1._id, guestId: studentUsers[0]._id, rating: 5, comment: 'Excellent hostel! Clean rooms, great food, and helpful staff.' },
+    { propertyId: prop1._id, guestId: studentUsers[1]._id, rating: 4, comment: 'Very good place to stay. WiFi could be faster.' },
+    { propertyId: prop1._id, guestId: studentUsers[2]._id, rating: 4, comment: 'Good hostel, well maintained. Mess food is tasty.' },
+    { propertyId: prop3._id, guestId: studentUsers[3]._id, rating: 5, comment: 'Premium facilities. Highly recommended.' },
+  ]);
+
+  // ── Today Mess Menu for NST-001 ───────────────────────────────────────────
+  await MessMenu.create({
+    hostelId: hostel1._id, tenantId: owner1._id,
+    date: today, uploadedBy: mess1._id,
+    breakfast: { items: ['Poha', 'Chai', 'Boiled Eggs', 'Toast'], photoUrl: null },
+    lunch: { items: ['Dal Tadka', 'Rice', 'Roti', 'Sabzi', 'Salad'], photoUrl: null },
+    dinner: { items: ['Paneer Butter Masala', 'Rice', 'Roti', 'Dal', 'Sweet'], photoUrl: null },
+    specialNote: '🎉 Sunday Special: Gulab Jamun in dinner!',
+  });
+
+  // ── Students for NST-002 (Prop 2) ────────────────────────────────────────
+  const floor3 = await Floor.create({ tenantId: owner1._id, hostelId: hostel2._id, propertyId: prop2._id, name: 'Ground Floor', order: 0 });
+  const room3 = await Room.create({ tenantId: owner1._id, hostelId: hostel2._id, propertyId: prop2._id, floorId: floor3._id, roomNumber: 'G01', capacity: 2, roomType: 'DOUBLE', status: 'AVAILABLE', pricePerBed: 7500 });
+  const bed3a = await Bed.create({ tenantId: owner1._id, hostelId: hostel2._id, propertyId: prop2._id, roomId: room3._id, bedNumber: 'B1', status: 'AVAILABLE' });
+
+  const studentG = await User.create({
+    name: 'Ananya Sharma', email: 'ananya@gmail.com', phone: '9000000006',
+    passwordHash: await hash('0006'), role: 'STUDENT', studentId: '9000000006',
+    hostelId: hostel2._id, status: 'ACTIVE',
+  });
+
+  console.log('\n✅ Seeding complete!\n');
+  console.log('═══════════════════════════════════════════════════');
+  console.log('🔑  LOGIN CREDENTIALS');
+  console.log('═══════════════════════════════════════════════════');
+  console.log('SUPER ADMIN   → admin@nexstay.in         / admin123');
+  console.log('OWNER 1       → rajesh@nexstay.in        / owner123');
+  console.log('OWNER 2       → priya@nexstay.in         / owner123');
+  console.log('WARDEN        → warden@nexstay.in        / warden123');
+  console.log('MESS MANAGER  → mess@nexstay.in          / mess123');
+  console.log('STUDENT 1     → ID: 9000000001           / PW: 0001');
+  console.log('STUDENT 2     → ID: 9000000002           / PW: 0002');
+  console.log('STUDENT 3     → ID: 9000000003           / PW: 0003');
+  console.log('STUDENT 4     → ID: 9000000004           / PW: 0004');
+  console.log('STUDENT 5     → ID: 9000000005           / PW: 0005');
+  console.log('═══════════════════════════════════════════════════\n');
 
   await mongoose.disconnect();
-  process.exit(0);
-
 }
 
-seed().catch((err) => {
-  console.error('❌ Seed failed:', err);
-  process.exit(1);
-});
+seed().catch(err => { console.error('Seed failed:', err); process.exit(1); });

@@ -1,109 +1,70 @@
 // ─── Enums ────────────────────────────────────────────────────────────────────
-
 export enum Role {
-  GUEST = 'GUEST',
+  STUDENT      = 'STUDENT',
   HOSTEL_ADMIN = 'HOSTEL_ADMIN',
-  SUPER_ADMIN = 'SUPER_ADMIN',
-  PG_OWNER = 'PG_OWNER',
-  STUDENT = 'STUDENT',
+  SUPER_ADMIN  = 'SUPER_ADMIN',
+  WARDEN       = 'WARDEN',
+  MESS_MANAGER = 'MESS_MANAGER',
 }
 
-export enum UserStatus {
-  ACTIVE = 'ACTIVE',
-  SUSPENDED = 'SUSPENDED',
+export enum UserStatus { ACTIVE = 'ACTIVE', SUSPENDED = 'SUSPENDED' }
+export enum VerificationStatus { PENDING = 'PENDING', APPROVED = 'APPROVED', REJECTED = 'REJECTED' }
+export enum PropertyGender { BOYS = 'BOYS', GIRLS = 'GIRLS', CO_ED = 'CO_ED' }
+export enum RoomType { SINGLE = 'SINGLE', DOUBLE = 'DOUBLE', TRIPLE = 'TRIPLE', FOUR_SHARING = 'FOUR_SHARING' }
+export enum RoomStatus { AVAILABLE = 'AVAILABLE', FULL = 'FULL' }
+export enum BedStatus { AVAILABLE = 'AVAILABLE', OCCUPIED = 'OCCUPIED', RESERVED = 'RESERVED' }
+export enum BookingStatus { PENDING = 'PENDING', CONFIRMED = 'CONFIRMED', CANCELLED = 'CANCELLED', CHECKED_IN = 'CHECKED_IN', CHECKED_OUT = 'CHECKED_OUT' }
+export enum RentStatus { PAID = 'PAID', UNPAID = 'UNPAID', PARTIAL = 'PARTIAL' }
+export enum ComplaintStatus { OPEN = 'OPEN', IN_PROGRESS = 'IN_PROGRESS', RESOLVED = 'RESOLVED', CLOSED = 'CLOSED' }
+export enum ComplaintCategory { ELECTRICITY = 'ELECTRICITY', FOOD = 'FOOD', INTERNET = 'INTERNET', WATER = 'WATER', CLEANING = 'CLEANING', OTHER = 'OTHER' }
+export enum StaffRole { WARDEN = 'WARDEN', COOK = 'COOK', CLEANER = 'CLEANER', SECURITY = 'SECURITY', MANAGER = 'MANAGER', OTHER = 'OTHER' }
+export enum ExpenseCategory { ELECTRICITY = 'ELECTRICITY', WATER = 'WATER', STAFF_SALARY = 'STAFF_SALARY', MAINTENANCE = 'MAINTENANCE', INTERNET = 'INTERNET', FOOD = 'FOOD', MISCELLANEOUS = 'MISCELLANEOUS' }
+export enum NotificationChannel { IN_APP = 'IN_APP', EMAIL = 'EMAIL' }
+export enum HostelStudentStatus { ACTIVE = 'ACTIVE', CHECKED_OUT = 'CHECKED_OUT' }
+
+// ─── Staff Permissions ────────────────────────────────────────────────────────
+export interface StaffPermissions {
+  canViewStudents:     boolean;
+  canManageComplaints: boolean;
+  canViewRentRecords:  boolean;
+  canUploadMenu:       boolean;
+  canViewSalary:       boolean;
+  canManageRooms:      boolean;
+  canViewAttendance:   boolean;
 }
 
-export enum VerificationStatus {
-  PENDING = 'PENDING',
-  APPROVED = 'APPROVED',
-  REJECTED = 'REJECTED',
+// ─── Hostel ───────────────────────────────────────────────────────────────────
+export interface IHostel {
+  _id: string;
+  hostelCode: string;
+  name: string;
+  ownerId: string;
+  address?: { street?: string; city?: string; state?: string; pincode?: string };
+  gender: PropertyGender;
+  contactPhone?: string;
+  contactEmail?: string;
+  isActive: boolean;
+  propertyId?: string;
+  messEnabled: boolean;
+  messTimings?: { breakfast: string; lunch: string; dinner: string };
+  createdAt: string;
 }
 
-export enum PropertyGender {
-  BOYS = 'BOYS',
-  GIRLS = 'GIRLS',
-  CO_ED = 'CO_ED',
+// ─── Mess Menu ────────────────────────────────────────────────────────────────
+export interface IMeal { items: string[]; photoUrl: string | null; }
+export interface IMessMenu {
+  _id: string;
+  hostelId: string;
+  date: string;
+  uploadedBy: string | { name: string };
+  breakfast: IMeal;
+  lunch: IMeal;
+  dinner: IMeal;
+  specialNote: string;
+  createdAt: string;
 }
 
-export enum RoomType {
-  SINGLE = 'SINGLE',
-  DOUBLE = 'DOUBLE',
-  TRIPLE = 'TRIPLE',
-  FOUR_SHARING = 'FOUR_SHARING',
-}
-
-export enum RoomStatus {
-  AVAILABLE = 'AVAILABLE',
-  FULL = 'FULL',
-}
-
-export enum BedStatus {
-  AVAILABLE = 'AVAILABLE',
-  OCCUPIED = 'OCCUPIED',
-  RESERVED = 'RESERVED',
-}
-
-export enum BookingStatus {
-  PENDING = 'PENDING',
-  CONFIRMED = 'CONFIRMED',
-  CANCELLED = 'CANCELLED',
-  CHECKED_IN = 'CHECKED_IN',
-  CHECKED_OUT = 'CHECKED_OUT',
-}
-
-export enum RentStatus {
-  PAID = 'PAID',
-  UNPAID = 'UNPAID',
-  PARTIAL = 'PARTIAL',
-}
-
-export enum ComplaintStatus {
-  OPEN = 'OPEN',
-  IN_PROGRESS = 'IN_PROGRESS',
-  RESOLVED = 'RESOLVED',
-  CLOSED = 'CLOSED',
-}
-
-export enum ComplaintCategory {
-  ELECTRICITY = 'ELECTRICITY',
-  FOOD = 'FOOD',
-  INTERNET = 'INTERNET',
-  WATER = 'WATER',
-  CLEANING = 'CLEANING',
-  OTHER = 'OTHER',
-}
-
-export enum StaffRole {
-  WARDEN = 'WARDEN',
-  COOK = 'COOK',
-  CLEANER = 'CLEANER',
-  SECURITY = 'SECURITY',
-  MANAGER = 'MANAGER',
-  OTHER = 'OTHER',
-}
-
-export enum ExpenseCategory {
-  ELECTRICITY = 'ELECTRICITY',
-  WATER = 'WATER',
-  STAFF_SALARY = 'STAFF_SALARY',
-  MAINTENANCE = 'MAINTENANCE',
-  INTERNET = 'INTERNET',
-  FOOD = 'FOOD',
-  MISCELLANEOUS = 'MISCELLANEOUS',
-}
-
-export enum NotificationChannel {
-  IN_APP = 'IN_APP',
-  EMAIL = 'EMAIL',
-}
-
-export enum HostelStudentStatus {
-  ACTIVE = 'ACTIVE',
-  CHECKED_OUT = 'CHECKED_OUT',
-}
-
-// ─── Interfaces ───────────────────────────────────────────────────────────────
-
+// ─── Core Interfaces ──────────────────────────────────────────────────────────
 export interface IUser {
   _id: string;
   name: string;
@@ -117,21 +78,11 @@ export interface IUser {
   identityProofUrl?: string;
   ownerVerificationStatus?: VerificationStatus;
   ownerRejectionReason?: string;
+  hostelId?: string | null;
+  studentId?: string | null;
+  staffPermissions?: StaffPermissions | null;
   createdAt: string;
   updatedAt: string;
-}
-
-export interface IGuestProfile {
-  _id: string;
-  userId: string;
-  college?: string;
-  guardianName?: string;
-  guardianPhone?: string;
-  aadhaarUrl?: string;
-  studentIdUrl?: string;
-  photoUrl?: string;
-  currentBookingId?: string;
-  createdAt: string;
 }
 
 export interface IProperty {
@@ -161,40 +112,15 @@ export interface IProperty {
   createdAt: string;
 }
 
-export interface IFloor {
-  _id: string;
-  tenantId: string;
-  propertyId: string;
-  name: string;
-  order: number;
-}
-
-export interface IRoom {
-  _id: string;
-  tenantId: string;
-  propertyId: string;
-  floorId: string;
-  roomNumber: string;
-  capacity: number;
-  roomType: RoomType;
-  status: RoomStatus;
-  pricePerBed: number;
-}
-
-export interface IBed {
-  _id: string;
-  tenantId: string;
-  propertyId: string;
-  roomId: string;
-  bedNumber: string;
-  status: BedStatus;
-  currentBookingId?: string;
-}
+export interface IFloor { _id: string; tenantId: string; hostelId?: string; propertyId: string; name: string; order: number; }
+export interface IRoom { _id: string; tenantId: string; hostelId?: string; propertyId: string; floorId: string; roomNumber: string; capacity: number; roomType: RoomType; status: RoomStatus; pricePerBed: number; }
+export interface IBed { _id: string; tenantId: string; hostelId?: string; propertyId: string; roomId: string; bedNumber: string; status: BedStatus; currentBookingId?: string; }
 
 export interface IBooking {
   _id: string;
   guestId: string;
   tenantId: string;
+  hostelId?: string;
   propertyId: string;
   roomId: string;
   bedId: string;
@@ -216,6 +142,7 @@ export interface IBooking {
 export interface IHostelStudent {
   _id: string;
   tenantId: string;
+  hostelId?: string;
   propertyId: string;
   bookingId: string;
   guestId: string;
@@ -240,6 +167,7 @@ export interface IHostelStudent {
 export interface IRentRecord {
   _id: string;
   tenantId: string;
+  hostelId?: string;
   propertyId: string;
   roomId: string;
   hostelStudentId: string;
@@ -260,6 +188,7 @@ export interface IRentRecord {
 export interface IStaff {
   _id: string;
   tenantId: string;
+  hostelId?: string;
   propertyId: string;
   name: string;
   phone: string;
@@ -277,6 +206,7 @@ export interface IStaff {
 export interface IExpense {
   _id: string;
   tenantId: string;
+  hostelId?: string;
   propertyId: string;
   category: ExpenseCategory;
   amount: number;
@@ -301,6 +231,7 @@ export interface IInventory {
 export interface IComplaint {
   _id: string;
   tenantId: string;
+  hostelId?: string;
   propertyId: string;
   guestId?: string;
   hostelStudentId?: string;
@@ -309,11 +240,7 @@ export interface IComplaint {
   category: ComplaintCategory;
   status: ComplaintStatus;
   assignedToStaffId?: string;
-  statusHistory: Array<{
-    status: ComplaintStatus;
-    note?: string;
-    changedAt: string;
-  }>;
+  statusHistory: Array<{ status: ComplaintStatus; note?: string; changedAt: string }>;
   resolvedAt?: string;
   createdAt: string;
 }
@@ -330,6 +257,7 @@ export interface IReview {
 export interface INotification {
   _id: string;
   userId: string;
+  hostelId?: string;
   type: string;
   title: string;
   message: string;
@@ -340,7 +268,6 @@ export interface INotification {
 }
 
 // ─── Auth Types ───────────────────────────────────────────────────────────────
-
 export interface AuthUser {
   _id: string;
   name: string;
@@ -351,15 +278,18 @@ export interface AuthUser {
   avatar?: string;
   businessName?: string;
   ownerVerificationStatus?: VerificationStatus;
+  hostelId?: string | null;
+  studentId?: string | null;
+  staffPermissions?: StaffPermissions | null;
 }
 
 export interface LoginResponse {
   user: AuthUser;
   accessToken: string;
   refreshToken: string;
+  hostel?: IHostel;
+  hostels?: IHostel[];
 }
-
-// ─── API Response Types ───────────────────────────────────────────────────────
 
 export interface ApiResponse<T = unknown> {
   success: boolean;

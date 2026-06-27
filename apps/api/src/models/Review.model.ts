@@ -20,5 +20,6 @@ const ReviewSchema = new Schema<IReviewDoc>(
 
 ReviewSchema.index({ propertyId: 1 });
 ReviewSchema.index({ guestId: 1 });
+ReviewSchema.index({ propertyId: 1, guestId: 1 }, { unique: true }); // prevent duplicate reviews
 
 export const Review = mongoose.model<IReviewDoc>('Review', ReviewSchema);

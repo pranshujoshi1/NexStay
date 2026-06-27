@@ -1,10 +1,11 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import { User } from '../models/User.model';
-import { GuestProfile } from '../models/GuestProfile.model';
+import { Hostel } from '../models/Hostel.model';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../utils/jwt';
 import { generateOTP } from '../utils/otp';
 import { AuthRequest } from '../middleware/auth.middleware';
+import { sendOtpEmail } from '../services/email.service';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const formatUser = (user: InstanceType<typeof User>) => ({
@@ -17,69 +18,121 @@ const formatUser = (user: InstanceType<typeof User>) => ({
   avatar: user.avatar,
   businessName: user.businessName,
   ownerVerificationStatus: user.ownerVerificationStatus,
+  hostelId: user.hostelId || null,
+  studentId: user.studentId || null,
+  staffPermissions: user.staffPermissions || null,
 });
 
-// ─── POST /api/auth/register ──────────────────────────────────────────────────
-export const register = async (req: Request, res: Response): Promise<void> => {
+// ─── POST /api/auth/login ─────────────────────────────────────────────────────
+// Body: { identifier, password, role, hostelCode? }
+export const login = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { name, email, phone, password, role, businessName } = req.body;
-    if (!name || !email || !phone || !password) {
-      res.status(400).json({ success: false, message: 'All fields are required' });
+    const { identifier, password, role, email, hostelCode } = req.body;
+
+    const loginId = identifier || email;
+    const loginRole = role || null;
+
+    if (!loginId || !password) {
+      res.status(400).json({ success: false, message: 'Login ID and password are required' });
       return;
     }
 
-    const existing = await User.findOne({ email });
-    if (existing) {
-      res.status(409).json({ success: false, message: 'Email already registered' });
+    // Build query — find by email OR studentId, optionally by role
+    const orConditions: object[] = [
+      { email: loginId.toLowerCase() },
+      { studentId: loginId },
+      { phone: loginId },
+    ];
+    const query: any = { $or: orConditions };
+    if (loginRole) query.role = loginRole;
+
+    // If hostelCode is provided (Warden/Mess/Student), scope to that hostel
+    if (hostelCode && ['WARDEN', 'MESS_MANAGER', 'STUDENT'].includes(loginRole)) {
+      const { Hostel: H } = await import('../models/Hostel.model');
+      const hostelDoc = await H.findOne({ hostelCode: hostelCode.toUpperCase() }).lean();
+      if (!hostelDoc) {
+        res.status(401).json({ success: false, message: `Hostel code "${hostelCode}" not found` });
+        return;
+      }
+      query.hostelId = hostelDoc._id;
+    }
+
+    const user = await User.findOne(query);
+
+    if (!user) {
+      res.status(401).json({ success: false, message: 'Invalid credentials' });
       return;
     }
 
-    // Public registration: only GUEST or HOSTEL_ADMIN allowed
-    const allowedRoles = ['GUEST', 'HOSTEL_ADMIN'];
-    const userRole = allowedRoles.includes(role) ? role : 'GUEST';
-
-    const passwordHash = await bcrypt.hash(password, 12);
-    const otp = generateOTP();
-    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 min
-
-    const user = await User.create({
-      name, email, phone, passwordHash, role: userRole,
-      businessName: businessName || '',
-      ownerVerificationStatus: userRole === 'HOSTEL_ADMIN' ? 'PENDING' : undefined,
-      otp, otpExpiry,
-    });
-
-    // Create guest profile for GUEST role
-    if (userRole === 'GUEST') {
-      await GuestProfile.create({ userId: user._id });
+    const isMatch = await user.comparePassword(password);
+    if (!isMatch) {
+      res.status(401).json({ success: false, message: 'Invalid credentials' });
+      return;
     }
 
-    const isDev = process.env.NODE_ENV !== 'production';
-    if (isDev) {
-      console.log(`[DEV] OTP for ${email}: 123456 (hardcoded in dev)`);
+    if (user.status === 'SUSPENDED') {
+      res.status(403).json({
+        success: false,
+        message: 'Your account has been suspended. Contact support.',
+      });
+      return;
     }
 
-    res.status(201).json({
-      success: true,
-      message: isDev
-        ? 'Account created. Verify with OTP 123456 (dev mode).'
-        : 'Account created. Please check your email for the OTP.',
-      ...(isDev && { otp: '123456' }), // only expose OTP in dev
-      userId: user._id,
-    });
-  } catch (error: unknown) {
-    const msg = error instanceof Error ? error.message : String(error);
-    console.error('Register error:', msg, error);
-    res.status(500).json({ success: false, message: 'Internal server error', ...(process.env.NODE_ENV !== 'production' && { detail: msg }) });
+    // Build JWT payload
+    const payload = {
+      id: user._id,
+      role: user.role,
+      email: user.email || '',
+      hostelId: user.hostelId || null,
+    };
+    const accessToken = signAccessToken(payload);
+    const refreshToken = signRefreshToken(payload);
+
+    // Store hashed refresh token
+    const hashedRefresh = await bcrypt.hash(refreshToken, 8);
+    user.refreshToken = hashedRefresh;
+    await user.save();
+
+    // Populate hostel data for relevant roles
+    let hostel: any = null;
+    let hostels: any[] = [];
+
+    if ((user.role === 'WARDEN' || user.role === 'MESS_MANAGER') && user.hostelId) {
+      const { Hostel: H } = await import('../models/Hostel.model');
+      const h = await H.findById(user.hostelId).select('name hostelCode address gender messEnabled messTimings').lean();
+      if (h) hostel = h;
+    }
+
+    if (user.role === 'HOSTEL_ADMIN') {
+      const { Hostel: H } = await import('../models/Hostel.model');
+      hostels = await H.find({ ownerId: user._id, isActive: true })
+        .select('name hostelCode address gender isActive messEnabled')
+        .lean();
+    }
+
+    if (user.role === 'STUDENT' && user.hostelId) {
+      const { Hostel: H } = await import('../models/Hostel.model');
+      const h = await H.findById(user.hostelId).select('name hostelCode').lean();
+      if (h) hostel = h;
+    }
+
+    const loginResult: Record<string, any> = { success: true, user: formatUser(user), accessToken, refreshToken };
+    if (hostel) loginResult.hostel = hostel;
+    if (hostels.length > 0) loginResult.hostels = hostels;
+    res.json(loginResult);
+  } catch (err) {
+    console.error('Login error:', err);
+    res.status(500).json({ success: false, message: 'Internal server error' });
   }
 };
+
+
 
 // ─── POST /api/auth/verify-otp ────────────────────────────────────────────────
 export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, otp } = req.body;
 
-    // Dev mode: always accept "123456"
     const isDev = process.env.NODE_ENV !== 'production';
     const user = await User.findOne({ email });
 
@@ -100,57 +153,13 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
     user.otpExpiry = undefined;
     await user.save();
 
-    const payload = { id: user._id, role: user.role, email: user.email };
+    const payload = { id: user._id, role: user.role, email: user.email || '', hostelId: user.hostelId || null };
     const accessToken = signAccessToken(payload);
     const refreshToken = signRefreshToken(payload);
 
     res.json({
       success: true,
       message: 'Account verified',
-      user: formatUser(user),
-      accessToken,
-      refreshToken,
-    });
-  } catch {
-    res.status(500).json({ success: false, message: 'Internal server error' });
-  }
-};
-
-// ─── POST /api/auth/login ─────────────────────────────────────────────────────
-export const login = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { email, password } = req.body;
-    if (!email || !password) {
-      res.status(400).json({ success: false, message: 'Email and password are required' });
-      return;
-    }
-
-    const user = await User.findOne({ email });
-    if (!user) {
-      res.status(401).json({ success: false, message: 'Invalid credentials' });
-      return;
-    }
-
-    const isMatch = await user.comparePassword(password);
-    if (!isMatch) {
-      res.status(401).json({ success: false, message: 'Invalid credentials' });
-      return;
-    }
-
-    if (user.status === 'SUSPENDED') {
-      res.status(403).json({
-        success: false,
-        message: 'Your account has been suspended. Contact support.',
-      });
-      return;
-    }
-
-    const payload = { id: user._id, role: user.role, email: user.email };
-    const accessToken = signAccessToken(payload);
-    const refreshToken = signRefreshToken(payload);
-
-    res.json({
-      success: true,
       user: formatUser(user),
       accessToken,
       refreshToken,
@@ -170,15 +179,29 @@ export const refreshToken = async (req: Request, res: Response): Promise<void> =
     }
 
     const decoded = verifyRefreshToken(token);
-    const user = await User.findById(decoded.id).select('-passwordHash');
+    const user = await User.findById(decoded.id).select('-passwordHash -otp -otpExpiry');
     if (!user) {
       res.status(401).json({ success: false, message: 'User not found' });
       return;
     }
 
-    const payload = { id: user._id, role: user.role, email: user.email };
+    // Verify stored refresh token (Bug 6 — stateful logout)
+    if (user.refreshToken) {
+      const isValid = await bcrypt.compare(token, user.refreshToken);
+      if (!isValid) {
+        res.status(401).json({ success: false, message: 'Refresh token invalidated' });
+        return;
+      }
+    }
+
+    const payload = { id: user._id, role: user.role, email: user.email || '', hostelId: user.hostelId || null };
     const accessToken = signAccessToken(payload);
     const newRefreshToken = signRefreshToken(payload);
+
+    // Update stored refresh token
+    const hashedRefresh = await bcrypt.hash(newRefreshToken, 8);
+    user.refreshToken = hashedRefresh;
+    await user.save();
 
     res.json({ success: true, accessToken, refreshToken: newRefreshToken });
   } catch {
@@ -187,9 +210,16 @@ export const refreshToken = async (req: Request, res: Response): Promise<void> =
 };
 
 // ─── POST /api/auth/logout ────────────────────────────────────────────────────
-// Stateless JWT: client must discard tokens. Server-side token blacklist is future work.
-export const logout = async (_req: Request, res: Response): Promise<void> => {
-  res.json({ success: true, message: 'Logged out successfully' });
+export const logout = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (req.user?.id) {
+      // Invalidate refresh token in DB (Bug 6 fix)
+      await User.findByIdAndUpdate(req.user.id, { refreshToken: null });
+    }
+    res.json({ success: true, message: 'Logged out successfully' });
+  } catch {
+    res.json({ success: true, message: 'Logged out' });
+  }
 };
 
 // ─── POST /api/auth/forgot-password ──────────────────────────────────────────
@@ -203,14 +233,15 @@ export const forgotPassword = async (req: Request, res: Response): Promise<void>
     }
 
     const isDev = process.env.NODE_ENV !== 'production';
-
-    // Dev mode: hardcode OTP; prod: use real random OTP already generated via generateOTP()
     user.otp = isDev ? '123456' : generateOTP();
     user.otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
     await user.save();
 
     if (isDev) {
       console.log(`[DEV] Password reset OTP for ${email}: ${user.otp}`);
+    } else {
+      // Send real OTP email
+      await sendOtpEmail(email, user.otp, user.name);
     }
 
     res.json({
@@ -252,12 +283,31 @@ export const resetPassword = async (req: Request, res: Response): Promise<void> 
 // ─── GET /api/auth/me ─────────────────────────────────────────────────────────
 export const getMe = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const user = await User.findById(req.user?.id).select('-passwordHash -otp -otpExpiry');
+    const user = await User.findById(req.user?.id).select('-passwordHash -otp -otpExpiry -refreshToken');
     if (!user) {
       res.status(404).json({ success: false, message: 'User not found' });
       return;
     }
-    res.json({ success: true, user: formatUser(user) });
+
+    // Attach hostel data
+    let hostel: any = null;
+    let hostels: any[] = [];
+
+    if ((user.role === 'WARDEN' || user.role === 'MESS_MANAGER') && user.hostelId) {
+      const h = await Hostel.findById(user.hostelId).select('name hostelCode address gender messEnabled messTimings').lean();
+      if (h) hostel = h;
+    }
+
+    if (user.role === 'HOSTEL_ADMIN') {
+      hostels = await Hostel.find({ ownerId: user._id, isActive: true })
+        .select('name hostelCode address gender isActive messEnabled')
+        .lean();
+    }
+
+    const result: Record<string, any> = { success: true, user: formatUser(user) };
+    if (hostel) result.hostel = hostel;
+    if (hostels.length > 0) result.hostels = hostels;
+    res.json(result);
   } catch {
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
@@ -299,7 +349,3 @@ export const changePassword = async (req: AuthRequest, res: Response): Promise<v
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
 };
-
-// ─── Legacy alias: signup = register ─────────────────────────────────────────
-export const signup = register;
-

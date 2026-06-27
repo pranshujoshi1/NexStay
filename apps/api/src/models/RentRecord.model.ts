@@ -2,6 +2,7 @@ import mongoose, { Document, Schema } from 'mongoose';
 
 export interface IRentRecordDoc extends Document {
   tenantId: mongoose.Types.ObjectId;
+  hostelId?: mongoose.Types.ObjectId | null;
   propertyId: mongoose.Types.ObjectId;
   roomId?: mongoose.Types.ObjectId;
   hostelStudentId: mongoose.Types.ObjectId;
@@ -25,6 +26,7 @@ export interface IRentRecordDoc extends Document {
 const RentRecordSchema = new Schema<IRentRecordDoc>(
   {
     tenantId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    hostelId: { type: Schema.Types.ObjectId, ref: 'Hostel', default: null },
     propertyId: { type: Schema.Types.ObjectId, ref: 'Property', required: true },
     roomId: { type: Schema.Types.ObjectId, ref: 'Room', default: null },
     hostelStudentId: { type: Schema.Types.ObjectId, ref: 'HostelStudent', required: true },
@@ -53,5 +55,6 @@ RentRecordSchema.index({ tenantId: 1, status: 1 });
 RentRecordSchema.index({ tenantId: 1, month: 1 });
 RentRecordSchema.index({ hostelStudentId: 1, month: 1 });
 RentRecordSchema.index({ propertyId: 1, status: 1 });
+RentRecordSchema.index({ hostelId: 1, status: 1 });
 
 export const RentRecord = mongoose.model<IRentRecordDoc>('RentRecord', RentRecordSchema);

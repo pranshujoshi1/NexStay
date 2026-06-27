@@ -3,6 +3,7 @@ import mongoose, { Document, Schema } from 'mongoose';
 export interface IBookingDoc extends Document {
   guestId: mongoose.Types.ObjectId;
   tenantId: mongoose.Types.ObjectId;
+  hostelId?: mongoose.Types.ObjectId | null;
   propertyId: mongoose.Types.ObjectId;
   roomId: mongoose.Types.ObjectId;
   bedId: mongoose.Types.ObjectId;
@@ -26,6 +27,7 @@ const BookingSchema = new Schema<IBookingDoc>(
   {
     guestId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     tenantId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    hostelId: { type: Schema.Types.ObjectId, ref: 'Hostel', default: null },
     propertyId: { type: Schema.Types.ObjectId, ref: 'Property', required: true },
     roomId: { type: Schema.Types.ObjectId, ref: 'Room', required: true },
     bedId: { type: Schema.Types.ObjectId, ref: 'Bed', required: true },
@@ -52,5 +54,6 @@ const BookingSchema = new Schema<IBookingDoc>(
 BookingSchema.index({ tenantId: 1, status: 1 });
 BookingSchema.index({ guestId: 1, status: 1 });
 BookingSchema.index({ propertyId: 1, status: 1 });
+BookingSchema.index({ hostelId: 1, status: 1 });
 
 export const Booking = mongoose.model<IBookingDoc>('Booking', BookingSchema);

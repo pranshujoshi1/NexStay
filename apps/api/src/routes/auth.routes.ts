@@ -1,7 +1,6 @@
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import {
-  register,
-  signup,
   verifyOtp,
   login,
   refreshToken,
@@ -14,17 +13,28 @@ import {
 } from '../controllers/auth.controller';
 import { protect } from '../middleware/auth.middleware';
 
+// ─── Rate Limiter — only on login/forgot in production ────────────────────────
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: process.env.NODE_ENV === 'production' ? 10 : 100, // relaxed in dev
+  message: { success: false, message: 'Too many attempts. Please try again in 15 minutes.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: () => process.env.NODE_ENV !== 'production', // skip entirely in dev
+});
+
 const router = Router();
 
-router.post('/register', register);
-router.post('/signup', signup); // alias for register
-router.post('/verify-otp', verifyOtp);
-router.post('/login', login);
-router.post('/refresh', refreshToken);
-router.post('/logout', logout);
-router.post('/forgot-password', forgotPassword);
+// Public routes (with rate limiting only on mutation endpoints)
+router.post('/login',          loginLimiter, login);
+router.post('/forgot-password', loginLimiter, forgotPassword);
+router.post('/verify-otp',     verifyOtp);
+router.post('/refresh',        refreshToken);
 router.post('/reset-password', resetPassword);
-router.get('/me', protect, getMe);
+
+// Protected routes — no rate limiting
+router.post('/logout',   protect, logout);
+router.get('/me',        protect, getMe);
 router.patch('/profile', protect, updateProfile);
 router.patch('/password', protect, changePassword);
 

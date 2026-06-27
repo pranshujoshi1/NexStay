@@ -1,12 +1,15 @@
 import { Request, Response, NextFunction } from 'express';
 import { verifyAccessToken } from '../utils/jwt';
-import { User } from '../models/User.model';
+import { User, StaffPermissions } from '../models/User.model';
 
 export interface AuthRequest extends Request {
   user?: {
     id: string;
     role: string;
     email: string;
+    hostelId?: string | null;
+    tenantId?: string | null;
+    staffPermissions?: StaffPermissions;
   };
 }
 
@@ -21,7 +24,7 @@ export const protect = async (req: AuthRequest, res: Response, next: NextFunctio
   const token = authHeader.split(' ')[1];
   try {
     const decoded = verifyAccessToken(token);
-    const user = await User.findById(decoded.id).select('-passwordHash -otp -otpExpiry');
+    const user = await User.findById(decoded.id).select('-passwordHash -otp -otpExpiry -refreshToken');
     if (!user) {
       res.status(401).json({ success: false, message: 'User not found' });
       return;
@@ -33,7 +36,26 @@ export const protect = async (req: AuthRequest, res: Response, next: NextFunctio
       });
       return;
     }
-    req.user = { id: String(user._id), role: user.role, email: user.email };
+
+    // Build tenantId: for HOSTEL_ADMIN = their own _id; for WARDEN/MESS_MANAGER = ownerId of their hostel
+    let tenantId: string | null = null;
+    if (user.role === 'HOSTEL_ADMIN') {
+      tenantId = String(user._id);
+    } else if ((user.role === 'WARDEN' || user.role === 'MESS_MANAGER') && user.hostelId) {
+      // Populate hostel to get ownerId
+      const { Hostel } = await import('../models/Hostel.model');
+      const hostel = await Hostel.findById(user.hostelId).select('ownerId').lean();
+      if (hostel) tenantId = String(hostel.ownerId);
+    }
+
+    req.user = {
+      id: String(user._id),
+      role: user.role,
+      email: user.email || '',
+      hostelId: user.hostelId ? String(user.hostelId) : null,
+      tenantId,
+      staffPermissions: user.staffPermissions || undefined,
+    };
     next();
   } catch {
     res.status(401).json({ success: false, message: 'Invalid or expired token' });
@@ -50,9 +72,15 @@ export const optionalAuth = async (req: AuthRequest, _res: Response, next: NextF
   const token = authHeader.split(' ')[1];
   try {
     const decoded = verifyAccessToken(token);
-    const user = await User.findById(decoded.id).select('-passwordHash -otp -otpExpiry');
+    const user = await User.findById(decoded.id).select('-passwordHash -otp -otpExpiry -refreshToken');
     if (user && user.status === 'ACTIVE') {
-      req.user = { id: String(user._id), role: user.role, email: user.email };
+      req.user = {
+        id: String(user._id),
+        role: user.role,
+        email: user.email || '',
+        hostelId: user.hostelId ? String(user.hostelId) : null,
+        tenantId: user.role === 'HOSTEL_ADMIN' ? String(user._id) : null,
+      };
     }
   } catch {
     // ignore — public route still continues
@@ -72,14 +100,12 @@ export const requireRoles = (...roles: string[]) => {
 };
 
 // ─── requireTenantAccess: auto-scope queries to tenantId = req.user.id ────────
-// Use this on all HOSTEL_ADMIN routes. SUPER_ADMIN bypasses automatically.
 export const requireTenantAccess = (req: AuthRequest, res: Response, next: NextFunction): void => {
   if (!req.user) {
     res.status(401).json({ success: false, message: 'Authentication required' });
     return;
   }
   if (req.user.role === 'SUPER_ADMIN') {
-    // Super admin can see everything — no tenantId scoping
     next();
     return;
   }
@@ -87,6 +113,50 @@ export const requireTenantAccess = (req: AuthRequest, res: Response, next: NextF
     res.status(403).json({ success: false, message: 'Hostel admin access required' });
     return;
   }
-  // The tenantId is available as req.user.id — controllers apply it in queries
   next();
+};
+
+// ─── requireHostelAccess: WARDEN/MESS_MANAGER can only access their hostelId ──
+export const requireHostelAccess = (req: AuthRequest, res: Response, next: NextFunction): void => {
+  if (!req.user) {
+    res.status(401).json({ success: false, message: 'Authentication required' });
+    return;
+  }
+  const { role, hostelId } = req.user;
+  // SUPER_ADMIN and HOSTEL_ADMIN bypass this check
+  if (role === 'SUPER_ADMIN' || role === 'HOSTEL_ADMIN') {
+    next();
+    return;
+  }
+  const requestedHostelId =
+    (req.params as any).hostelId ||
+    (req.body as any).hostelId ||
+    (req.query as any).hostelId;
+
+  if (requestedHostelId && requestedHostelId !== hostelId) {
+    res.status(403).json({ success: false, message: 'Access denied to this hostel' });
+    return;
+  }
+  next();
+};
+
+// ─── requirePermission: checks staffPermissions toggles ──────────────────────
+export const requirePermission = (permission: keyof StaffPermissions) => {
+  return (req: AuthRequest, res: Response, next: NextFunction): void => {
+    const { role, staffPermissions } = req.user || {};
+    // SUPER_ADMIN and HOSTEL_ADMIN always pass
+    if (role === 'SUPER_ADMIN' || role === 'HOSTEL_ADMIN') {
+      next();
+      return;
+    }
+    if (!staffPermissions || !staffPermissions[permission]) {
+      res.status(403).json({
+        success: false,
+        message: `Permission denied: ${permission}`,
+        permission,
+      });
+      return;
+    }
+    next();
+  };
 };

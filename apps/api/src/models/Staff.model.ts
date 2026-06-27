@@ -2,6 +2,7 @@ import mongoose, { Document, Schema } from 'mongoose';
 
 export interface IStaffDoc extends Document {
   tenantId: mongoose.Types.ObjectId;
+  hostelId?: mongoose.Types.ObjectId | null;
   propertyId: mongoose.Types.ObjectId;
   name: string;
   phone: string;
@@ -20,6 +21,7 @@ export interface IStaffDoc extends Document {
 const StaffSchema = new Schema<IStaffDoc>(
   {
     tenantId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    hostelId: { type: Schema.Types.ObjectId, ref: 'Hostel', default: null },
     propertyId: { type: Schema.Types.ObjectId, ref: 'Property', required: true },
     name: { type: String, required: true, trim: true },
     phone: { type: String, required: true, trim: true },

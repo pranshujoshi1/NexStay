@@ -2,6 +2,7 @@ import mongoose, { Document, Schema } from 'mongoose';
 
 export interface IComplaintDoc extends Document {
   tenantId: mongoose.Types.ObjectId;
+  hostelId?: mongoose.Types.ObjectId | null;
   propertyId: mongoose.Types.ObjectId;
   guestId?: mongoose.Types.ObjectId;
   hostelStudentId?: mongoose.Types.ObjectId;
@@ -20,6 +21,7 @@ export interface IComplaintDoc extends Document {
 const ComplaintSchema = new Schema<IComplaintDoc>(
   {
     tenantId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    hostelId: { type: Schema.Types.ObjectId, ref: 'Hostel', default: null },
     propertyId: { type: Schema.Types.ObjectId, ref: 'Property', required: true },
     guestId: { type: Schema.Types.ObjectId, ref: 'User', default: null },
     hostelStudentId: { type: Schema.Types.ObjectId, ref: 'HostelStudent', default: null },
@@ -59,5 +61,6 @@ const ComplaintSchema = new Schema<IComplaintDoc>(
 ComplaintSchema.index({ tenantId: 1, status: 1 });
 ComplaintSchema.index({ propertyId: 1, status: 1 });
 ComplaintSchema.index({ guestId: 1 });
+ComplaintSchema.index({ hostelId: 1, status: 1 });
 
 export const Complaint = mongoose.model<IComplaintDoc>('Complaint', ComplaintSchema);

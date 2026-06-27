@@ -53,14 +53,14 @@ function CancelDialog({ booking, onConfirm, onClose, loading }: any) {
 
 export default function BookingsPage() {
   const navigate = useNavigate();
-  const { token } = useAuth();
+  const { accessToken } = useAuth();
   const qc = useQueryClient();
-  const { data: bookings = [], isLoading } = useGuestBookings(token);
+  const { data: bookings = [], isLoading } = useGuestBookings(accessToken);
   const [cancelTarget, setCancelTarget] = useState<any>(null);
 
   const cancelMutation = useMutation({
     mutationFn: async (id: string) => {
-      await axios.delete(`/api/guest/bookings/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+      await axios.delete(`/api/guest/bookings/${id}`, { headers: { Authorization: `Bearer ${accessToken}` } });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['guest-bookings'] });

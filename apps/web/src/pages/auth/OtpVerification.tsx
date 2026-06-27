@@ -1,8 +1,7 @@
 import { useState, useRef } from 'react';
-import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { useLocation, Link } from 'react-router-dom';
 import { Building2, Loader2, RefreshCw } from 'lucide-react';
 import api from '@/lib/api';
-import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 
 export default function OtpVerificationPage() {
@@ -11,9 +10,7 @@ export default function OtpVerificationPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [resent, setResent] = useState(false);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
-  const navigate = useNavigate();
   const location = useLocation();
-  const { setUser } = useAuth();
   const email = location.state?.email || '';
   const devOtp = location.state?.otp || '';
 
@@ -35,16 +32,22 @@ export default function OtpVerificationPage() {
     setIsLoading(true); setError('');
     try {
       const { data } = await api.post('/auth/verify-otp', { email, otp: code });
-      localStorage.setItem('accessToken', data.accessToken);
-      localStorage.setItem('refreshToken', data.refreshToken);
-      setUser(data.user);
-      // Route to the correct dashboard based on the user's actual role from the server response
-      if (data.user?.role === 'HOSTEL_ADMIN') {
-        navigate('/admin/dashboard');
-      } else if (data.user?.role === 'SUPER_ADMIN') {
-        navigate('/superadmin/dashboard');
+      // Store tokens
+      localStorage.setItem('nexstay_token', data.accessToken);
+      if (data.refreshToken) localStorage.setItem('nexstay_refresh', data.refreshToken);
+      // Use full-page redirect so AuthContext bootstrap re-runs and hydrates user state
+      if (data.user?.role === 'SUPER_ADMIN') {
+        window.location.href = '/superadmin/dashboard';
+      } else if (data.user?.role === 'HOSTEL_ADMIN') {
+        window.location.href = '/admin/dashboard';
+      } else if (data.user?.role === 'WARDEN') {
+        window.location.href = '/warden/dashboard';
+      } else if (data.user?.role === 'MESS_MANAGER') {
+        window.location.href = '/mess/dashboard';
+      } else if (data.user?.role === 'STUDENT') {
+        window.location.href = '/student/dashboard';
       } else {
-        navigate('/account/bookings');
+        window.location.href = '/login';
       }
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Invalid OTP');

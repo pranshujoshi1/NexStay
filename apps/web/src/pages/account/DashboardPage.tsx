@@ -26,8 +26,8 @@ const STATUS_COLORS: Record<string, string> = {
 
 export default function DashboardPage() {
   const navigate = useNavigate();
-  const { user, token } = useAuth();
-  const { data: bookings = [] } = useGuestBookings(token);
+  const { user, accessToken } = useAuth();
+  const { data: bookings = [] } = useGuestBookings(accessToken);
 
   const currentStay = bookings.find(b => b.status === 'CHECKED_IN');
   const recentBooking = bookings[0];

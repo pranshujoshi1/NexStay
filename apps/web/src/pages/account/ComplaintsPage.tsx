@@ -49,9 +49,9 @@ function ComplaintTimeline({ history }: { history: any[] }) {
 }
 
 export default function ComplaintsPage() {
-  const { token } = useAuth();
+  const { accessToken } = useAuth();
   const qc = useQueryClient();
-  const { data: complaints = [], isLoading } = useGuestComplaints(token);
+  const { data: complaints = [], isLoading } = useGuestComplaints(accessToken);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ title: '', description: '', category: 'OTHER' });
   const [formError, setFormError] = useState('');
@@ -59,7 +59,7 @@ export default function ComplaintsPage() {
 
   const createMutation = useMutation({
     mutationFn: async (body: typeof form) => {
-      const { data } = await axios.post('/api/guest/complaints', body, { headers: { Authorization: `Bearer ${token}` } });
+      const { data } = await axios.post('/api/guest/complaints', body, { headers: { Authorization: `Bearer ${accessToken}` } });
       return data;
     },
     onSuccess: () => {

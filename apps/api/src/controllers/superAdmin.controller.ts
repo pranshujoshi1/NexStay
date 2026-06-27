@@ -24,7 +24,7 @@ export const getSuperDashboard = async (_req: AuthRequest, res: Response): Promi
   try {
     const [totalOwners, totalGuests, totalBookings] = await Promise.all([
       User.countDocuments({ role: 'HOSTEL_ADMIN' }),
-      User.countDocuments({ role: 'GUEST' }),
+      User.countDocuments({ role: 'STUDENT' }),
       Booking.countDocuments({}),
     ]);
 
@@ -80,7 +80,7 @@ export const getSuperDashboard = async (_req: AuthRequest, res: Response): Promi
 export const getGuests = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { search, status, page = '1', limit = '20' } = req.query as Record<string, string>;
-    const filter: any = { role: 'GUEST' };
+    const filter: any = { role: 'STUDENT' };
     if (status && status !== 'ALL') filter.status = status;
     if (search) filter.$or = [{ name: { $regex: search, $options: 'i' } }, { email: { $regex: search, $options: 'i' } }];
     const p = Math.max(1, parseInt(page)), lim = parseInt(limit);
@@ -310,3 +310,158 @@ export const getPlatformRevenue = async (_req: AuthRequest, res: Response): Prom
     res.json({ success: true, data: table });
   } catch { res.status(500).json({ success: false, message: 'Server error' }); }
 };
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// HOSTEL MANAGEMENT
+// ═══════════════════════════════════════════════════════════════════════════════
+import { Hostel } from '../models/Hostel.model';
+import { HostelStudent } from '../models/HostelStudent.model';
+import bcrypt from 'bcryptjs';
+
+export const getAllHostels = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { search, gender, page = '1', limit = '20' } = req.query as any;
+    const filter: any = {};
+    if (gender && gender !== 'ALL') filter.gender = gender;
+    if (search) filter.$or = [{ name: { $regex: search, $options: 'i' } }, { hostelCode: { $regex: search, $options: 'i' } }];
+
+    const skip = (Number(page) - 1) * Number(limit);
+    const [hostels, total] = await Promise.all([
+      Hostel.find(filter).populate('ownerId', 'name email phone').sort({ createdAt: -1 }).skip(skip).limit(Number(limit)).lean(),
+      Hostel.countDocuments(filter),
+    ]);
+
+    // attach student count per hostel
+    const withCounts = await Promise.all(hostels.map(async (h: any) => {
+      const studentCount = await HostelStudent.countDocuments({ hostelId: h._id, status: 'ACTIVE' });
+      return { ...h, studentCount };
+    }));
+
+    res.json({ success: true, data: withCounts, total, page: Number(page) });
+  } catch (err) { console.error(err); res.status(500).json({ success: false, message: 'Server error' }); }
+};
+
+export const getHostelById = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const hostel = await Hostel.findById(req.params.id).populate('ownerId', 'name email phone').lean();
+    if (!hostel) { res.status(404).json({ success: false, message: 'Hostel not found' }); return; }
+    res.json({ success: true, data: hostel });
+  } catch { res.status(500).json({ success: false, message: 'Server error' }); }
+};
+
+export const createHostel = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { name, gender, ownerId, address, contactPhone, contactEmail, messEnabled } = req.body;
+    if (!name || !ownerId) { res.status(400).json({ success: false, message: 'name and ownerId are required' }); return; }
+
+    const owner = await User.findById(ownerId);
+    if (!owner) { res.status(404).json({ success: false, message: 'Owner not found' }); return; }
+
+    // Generate unique hostel code
+    const count = await Hostel.countDocuments({});
+    const hostelCode = `NST-${String(count + 1).padStart(3, '0')}`;
+
+    const hostel = await Hostel.create({
+      hostelCode, name, gender: gender || 'BOYS',
+      ownerId, isActive: true,
+      address: address || {},
+      contactPhone, contactEmail,
+      messEnabled: messEnabled ?? false,
+    });
+
+    // Assign hostelId to owner user
+    await User.findByIdAndUpdate(ownerId, { hostelId: hostel._id });
+
+    res.status(201).json({ success: true, data: hostel, message: 'Hostel created successfully' });
+  } catch (err: any) {
+    console.error(err);
+    res.status(500).json({ success: false, message: err.message || 'Server error' });
+  }
+};
+
+export const updateHostel = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const hostel = await Hostel.findByIdAndUpdate(req.params.id, req.body, { new: true }).lean();
+    if (!hostel) { res.status(404).json({ success: false, message: 'Hostel not found' }); return; }
+    res.json({ success: true, data: hostel });
+  } catch { res.status(500).json({ success: false, message: 'Server error' }); }
+};
+
+export const toggleHostelActive = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const hostel = await Hostel.findById(req.params.id);
+    if (!hostel) { res.status(404).json({ success: false, message: 'Hostel not found' }); return; }
+    hostel.isActive = !hostel.isActive;
+    await hostel.save();
+    res.json({ success: true, data: hostel, message: `Hostel ${hostel.isActive ? 'activated' : 'deactivated'}` });
+  } catch { res.status(500).json({ success: false, message: 'Server error' }); }
+};
+
+export const deleteHostel = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const students = await HostelStudent.countDocuments({ hostelId: req.params.id, status: 'ACTIVE' });
+    if (students > 0) { res.status(400).json({ success: false, message: `Cannot delete: ${students} active student(s)` }); return; }
+    await Hostel.findByIdAndDelete(req.params.id);
+    res.json({ success: true, message: 'Hostel deleted' });
+  } catch { res.status(500).json({ success: false, message: 'Server error' }); }
+};
+
+// ── All Owners (dropdown) ──────────────────────────────────────────────────────
+export const getAllOwners = async (_req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const owners = await User.find({ role: 'HOSTEL_ADMIN', status: 'ACTIVE' }).select('name email phone').lean();
+    res.json({ success: true, data: owners });
+  } catch { res.status(500).json({ success: false, message: 'Server error' }); }
+};
+
+export const createOwner = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { name, email, phone, password, businessName } = req.body;
+    if (!name || !email || !phone || !password) {
+      res.status(400).json({ success: false, message: 'name, email, phone, password required' }); return;
+    }
+    const exists = await User.findOne({ $or: [{ email }, { phone }] });
+    if (exists) { res.status(409).json({ success: false, message: 'Email or phone already registered' }); return; }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+    const owner = await User.create({
+      name, email, phone, passwordHash,
+      role: 'HOSTEL_ADMIN', status: 'ACTIVE',
+      businessName, ownerVerificationStatus: 'APPROVED',
+    });
+    res.status(201).json({ success: true, data: { _id: owner._id, name, email, phone }, message: 'Owner created' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message || 'Server error' });
+  }
+};
+
+// ── Staff per hostel ──────────────────────────────────────────────────────────
+export const getHostelStaff = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const staff = await User.find({ hostelId: req.params.id, role: { $in: ['WARDEN', 'MESS_MANAGER'] } })
+      .select('name email phone role status staffPermissions').lean();
+    res.json({ success: true, data: staff });
+  } catch { res.status(500).json({ success: false, message: 'Server error' }); }
+};
+
+export const createStaffUser = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { name, email, phone, password, role, hostelId, staffPermissions } = req.body;
+    if (!name || !phone || !password || !role || !hostelId) {
+      res.status(400).json({ success: false, message: 'name, phone, password, role, hostelId required' }); return;
+    }
+    const exists = await User.findOne({ phone });
+    if (exists) { res.status(409).json({ success: false, message: 'Phone already registered' }); return; }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+    const user = await User.create({
+      name, email, phone, passwordHash,
+      role, status: 'ACTIVE', hostelId,
+      staffPermissions: staffPermissions || {},
+    });
+    res.status(201).json({ success: true, data: { _id: user._id, name, phone, role }, message: 'Staff user created' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message || 'Server error' });
+  }
+};
+

@@ -1,155 +1,304 @@
-import { useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { Eye, EyeOff, Building2, ArrowRight, Loader2 } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
-import { Role } from '@/types/shared';
-import { cn } from '@/lib/utils';
-import toast from 'react-hot-toast';
+import { useState, FormEvent } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import {
+  Building2, Eye, EyeOff, LogIn, Shield, Home, UserCheck,
+  ChefHat, GraduationCap, AlertCircle, Hash,
+} from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
+import { Role } from '../../types/shared';
 
-const schema = z.object({
-  email: z.string().email('Enter a valid email'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
-});
-type FormData = z.infer<typeof schema>;
+/* ─── Role config ─────────────────────────────────────────────────────────── */
+interface RoleOption {
+  value: string;
+  label: string;
+  icon: React.ReactNode;
+  identifierLabel: string;
+  identifierPlaceholder: string;
+  passwordPlaceholder: string;
+  needsHostelCode: boolean;  // Warden, Mess, Student need hostelCode to disambiguate
+  identifierType: string;
+}
 
-const DEV_CREDS = [
-  { label: 'Super Admin', email: 'superadmin@nexstay.in', pw: 'SuperAdmin@123', color: 'text-indigo' },
-  { label: 'Owner 1 (Pune)', email: 'owner1@nexstay.in', pw: 'Owner@123', color: 'text-primary' },
-  { label: 'Guest / Student', email: 'student1@nexstay.in', pw: 'Student@123', color: 'text-success' },
+const ROLES: RoleOption[] = [
+  {
+    value: Role.SUPER_ADMIN,
+    label: 'Super Admin',
+    icon: <Shield className="w-4 h-4" />,
+    identifierLabel: 'Email Address',
+    identifierPlaceholder: 'admin@nexstay.in',
+    passwordPlaceholder: 'Password',
+    needsHostelCode: false,
+    identifierType: 'email',
+  },
+  {
+    value: Role.HOSTEL_ADMIN,
+    label: 'Hostel Owner',
+    icon: <Home className="w-4 h-4" />,
+    identifierLabel: 'Email Address',
+    identifierPlaceholder: 'owner@example.com',
+    passwordPlaceholder: 'Password',
+    needsHostelCode: false,
+    identifierType: 'email',
+  },
+  {
+    value: Role.WARDEN,
+    label: 'Warden',
+    icon: <UserCheck className="w-4 h-4" />,
+    identifierLabel: 'Email / Phone',
+    identifierPlaceholder: 'warden@example.com',
+    passwordPlaceholder: 'Password',
+    needsHostelCode: true,
+    identifierType: 'text',
+  },
+  {
+    value: Role.MESS_MANAGER,
+    label: 'Mess Manager',
+    icon: <ChefHat className="w-4 h-4" />,
+    identifierLabel: 'Email / Phone',
+    identifierPlaceholder: 'mess@example.com',
+    passwordPlaceholder: 'Password',
+    needsHostelCode: true,
+    identifierType: 'text',
+  },
+  {
+    value: Role.STUDENT,
+    label: 'Student',
+    icon: <GraduationCap className="w-4 h-4" />,
+    identifierLabel: 'Mobile Number / Student ID',
+    identifierPlaceholder: '10-digit mobile number',
+    passwordPlaceholder: 'Last 4 digits of mobile (default)',
+    needsHostelCode: true,
+    identifierType: 'text',
+  },
 ];
 
-export default function LoginPage() {
-  const [showPassword, setShowPassword] = useState(false);
-  const [serverError, setServerError] = useState('');
+const ROLE_REDIRECTS: Record<string, string> = {
+  [Role.SUPER_ADMIN]:  '/superadmin/dashboard',
+  [Role.HOSTEL_ADMIN]: '/admin/dashboard',
+  [Role.WARDEN]:       '/warden/dashboard',
+  [Role.MESS_MANAGER]: '/mess/dashboard',
+  [Role.STUDENT]:      '/student/dashboard',
+};
+
+/* ─── Component ───────────────────────────────────────────────────────────── */
+export default function Login() {
   const { login } = useAuth();
-  const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const returnUrl = searchParams.get('returnUrl') || '';
+  const navigate   = useNavigate();
 
-  const { register, handleSubmit, setValue, formState: { errors, isSubmitting } } = useForm<FormData>({
-    resolver: zodResolver(schema),
-  });
+  const [selectedRole, setSelectedRole] = useState<string>(Role.HOSTEL_ADMIN);
+  const [identifier,   setIdentifier]   = useState('');
+  const [hostelCode,   setHostelCode]   = useState('');
+  const [password,     setPassword]     = useState('');
+  const [showPw,       setShowPw]       = useState(false);
+  const [error,        setError]        = useState('');
+  const [loading,      setLoading]      = useState(false);
 
-  const onSubmit = async (data: FormData) => {
-    setServerError('');
+  const currentRole = ROLES.find(r => r.value === selectedRole)!;
+
+  const handleRoleChange = (role: string) => {
+    setSelectedRole(role);
+    setIdentifier('');
+    setHostelCode('');
+    setPassword('');
+    setError('');
+  };
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!identifier.trim() || !password.trim()) { setError('Please fill in all fields.'); return; }
+    if (currentRole.needsHostelCode && !hostelCode.trim()) {
+      setError('Please enter your Hostel Code (e.g. NST-001).'); return;
+    }
+    setError('');
+    setLoading(true);
     try {
-      const user = await login(data.email, data.password);
-      toast.success(`Welcome back, ${user.name.split(' ')[0]}!`);
-      if (returnUrl) { navigate(returnUrl); return; }
-      if (user.role === Role.HOSTEL_ADMIN) navigate('/admin/dashboard');
-      else if (user.role === Role.SUPER_ADMIN) navigate('/superadmin/dashboard');
-      else navigate('/account/bookings');
+      await login(identifier.trim(), password, selectedRole, hostelCode.trim() || undefined);
+      navigate(ROLE_REDIRECTS[selectedRole] || '/');
     } catch (err: any) {
-      setServerError(err?.response?.data?.message || 'Login failed. Please try again.');
+      setError(err?.response?.data?.message || 'Invalid credentials. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <div className="min-h-screen bg-surface flex">
-      {/* Left branding panel */}
-      <div className="hidden lg:flex lg:w-[45%] bg-gradient-to-br from-primary to-primary-dark flex-col justify-between p-12">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center">
-            <Building2 className="w-5 h-5 text-white" />
-          </div>
-          <span className="text-xl font-bold text-white">NexStay</span>
-        </div>
-        <div>
-          <h1 className="text-4xl font-bold text-white leading-tight mb-4">
-            India's #1<br />PG & Hostel<br />Platform
-          </h1>
-          <p className="text-blue-100 text-lg leading-relaxed mb-8">
-            Find verified PGs or manage your hostel — all in one place.
-          </p>
-          <div className="bg-white/10 rounded-xl p-4 max-w-sm">
-            <p className="text-blue-100 text-sm italic">"NexStay reduced our rent collection time by 80%. Game changer!"</p>
-            <div className="flex items-center gap-2 mt-3">
-              <div className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center text-white text-xs font-bold">VP</div>
-              <div>
-                <p className="text-white text-xs font-medium">Vikram Patel</p>
-                <p className="text-blue-200 text-xs">Owner, Sunrise Boys PG · Pune</p>
-              </div>
+      {/* Left panel — branding */}
+      <div className="hidden lg:flex lg:w-[420px] flex-col justify-between p-10 bg-gradient-to-br from-indigo-600 via-indigo-700 to-indigo-900 relative overflow-hidden flex-shrink-0">
+        {/* Decorative blobs */}
+        <div className="absolute -top-24 -right-24 w-72 h-72 bg-white/5 rounded-full" />
+        <div className="absolute -bottom-24 -left-24 w-96 h-96 bg-white/5 rounded-full" />
+
+        <div className="relative z-10">
+          <div className="flex items-center gap-3 mb-12">
+            <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+              <Building2 className="w-5 h-5 text-white" />
             </div>
+            <span className="text-2xl font-bold text-white">NexStay</span>
+          </div>
+
+          <h1 className="text-3xl font-bold text-white mb-4 leading-tight">
+            Smart PG &<br />Hostel Management
+          </h1>
+          <p className="text-indigo-200 text-sm leading-relaxed">
+            All-in-one platform for hostel owners, wardens, mess managers and students.
+          </p>
+
+          <div className="mt-10 space-y-4">
+            {[
+              { icon: '🏠', text: 'Multi-hostel management' },
+              { icon: '👨‍🎓', text: 'Student & room tracking' },
+              { icon: '🍽️', text: 'Mess menu & attendance' },
+              { icon: '💰', text: 'Rent & payments' },
+            ].map(f => (
+              <div key={f.text} className="flex items-center gap-3">
+                <span className="text-lg">{f.icon}</span>
+                <span className="text-indigo-100 text-sm">{f.text}</span>
+              </div>
+            ))}
           </div>
         </div>
-        <div className="flex items-center gap-6 text-blue-100 text-sm">
-          <span>🏠 500+ PGs</span>
-          <span>⭐ 4.5 Rating</span>
-          <span>✅ Verified</span>
-        </div>
+
+        <p className="relative z-10 text-indigo-300 text-xs">
+          © {new Date().getFullYear()} NexStay. All rights reserved.
+        </p>
       </div>
 
-      {/* Right: Login form */}
-      <div className="w-full lg:w-[55%] flex items-center justify-center p-8">
-        <div className="w-full max-w-md animate-slide-up">
+      {/* Right panel — form */}
+      <div className="flex-1 flex items-center justify-center p-6 overflow-y-auto">
+        <div className="w-full max-w-md">
           {/* Mobile logo */}
           <div className="flex items-center gap-2 mb-8 lg:hidden">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
+            <div className="w-9 h-9 bg-indigo-600 rounded-xl flex items-center justify-center">
               <Building2 className="w-4 h-4 text-white" />
             </div>
-            <span className="text-lg font-bold text-text-primary">Nex<span className="text-primary">Stay</span></span>
+            <span className="text-xl font-bold text-text-primary">NexStay</span>
           </div>
 
           <h2 className="text-2xl font-bold text-text-primary mb-1">Welcome back</h2>
-          <p className="text-text-secondary text-sm mb-6">Sign in to your NexStay account</p>
+          <p className="text-text-muted text-sm mb-8">Select your role and sign in to continue</p>
 
-          {/* Dev credentials */}
-          <div className="card p-3 mb-6 bg-surface border border-surface-border">
-            <p className="text-xs font-semibold text-text-secondary mb-2">🧪 Dev Credentials (click to fill):</p>
-            <div className="space-y-1">
-              {DEV_CREDS.map(c => (
-                <button key={c.email} type="button" onClick={() => { setValue('email', c.email); setValue('password', c.pw); }}
-                  className="w-full text-left text-xs hover:bg-primary/5 rounded px-2 py-1 transition-colors flex items-center justify-between">
-                  <span className={`font-medium ${c.color}`}>{c.label}</span>
-                  <span className="text-text-muted">{c.email}</span>
-                </button>
-              ))}
+          {/* Role selector — dropdown */}
+          <div className="mb-6">
+            <label className="form-label mb-2">Login as</label>
+            <div className="relative">
+              <select
+                value={selectedRole}
+                onChange={e => handleRoleChange(e.target.value)}
+                className="input-field appearance-none pr-10 cursor-pointer font-medium text-text-primary"
+              >
+                {ROLES.map(role => (
+                  <option key={role.value} value={role.value}>{role.label}</option>
+                ))}
+              </select>
+              {/* Chevron icon */}
+              <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-text-muted">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
             </div>
           </div>
 
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-text-primary mb-1.5">Email address</label>
-              <input {...register('email')} type="email" placeholder="you@example.com"
-                className={cn('input-field', errors.email && 'border-danger focus:border-danger focus:ring-danger/20')} />
-              {errors.email && <p className="text-danger text-xs mt-1">{errors.email.message}</p>}
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="text-sm font-medium text-text-primary">Password</label>
-                <Link to="/forgot-password" className="text-xs text-primary hover:underline">Forgot password?</Link>
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Hostel Code (conditionally shown) */}
+            {currentRole.needsHostelCode && (
+              <div>
+                <label className="form-label">
+                  Hostel Code <span className="text-danger">*</span>
+                </label>
+                <div className="relative">
+                  <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
+                  <input
+                    type="text"
+                    value={hostelCode}
+                    onChange={e => setHostelCode(e.target.value.toUpperCase())}
+                    placeholder="e.g. NST-001"
+                    className="input-field pl-9 uppercase"
+                    maxLength={10}
+                  />
+                </div>
+                <p className="text-xs text-text-muted mt-1">Get this code from your Hostel Admin</p>
               </div>
-              <div className="relative">
-                <input {...register('password')} type={showPassword ? 'text' : 'password'} placeholder="••••••••"
-                  className={cn('input-field pr-10', errors.password && 'border-danger')} />
-                <button type="button" onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary transition-colors">
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-              {errors.password && <p className="text-danger text-xs mt-1">{errors.password.message}</p>}
-            </div>
-
-            {serverError && (
-              <div className="bg-danger-light border border-danger/30 rounded-lg px-4 py-3 text-sm text-danger">{serverError}</div>
             )}
 
-            <button type="submit" disabled={isSubmitting} className="btn-primary w-full flex items-center justify-center gap-2">
-              {isSubmitting ? <><Loader2 className="w-4 h-4 animate-spin" />Signing in...</> : <>Sign in <ArrowRight className="w-4 h-4" /></>}
+            {/* Identifier */}
+            <div>
+              <label className="form-label">{currentRole.identifierLabel}</label>
+              <input
+                type={currentRole.identifierType}
+                value={identifier}
+                onChange={e => setIdentifier(e.target.value)}
+                placeholder={currentRole.identifierPlaceholder}
+                required
+                className="input-field"
+              />
+            </div>
+
+            {/* Password */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="form-label mb-0">Password</label>
+                <Link to="/forgot-password" className="text-xs text-indigo-600 hover:underline">
+                  Forgot password?
+                </Link>
+              </div>
+              <div className="relative">
+                <input
+                  type={showPw ? 'text' : 'password'}
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  placeholder={currentRole.passwordPlaceholder}
+                  required
+                  className="input-field pr-10"
+                />
+                <button type="button" onClick={() => setShowPw(p => !p)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary transition-colors">
+                  {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            {/* Error */}
+            {error && (
+              <div className="flex items-start gap-2.5 bg-danger-light border border-danger/20 rounded-lg px-4 py-3">
+                <AlertCircle className="w-4 h-4 text-danger flex-shrink-0 mt-0.5" />
+                <span className="text-danger text-sm">{error}</span>
+              </div>
+            )}
+
+            {/* Submit */}
+            <button type="submit" disabled={loading} className="btn-primary w-full justify-center flex items-center gap-2 py-3 text-base">
+              {loading ? (
+                <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Signing in…</>
+              ) : (
+                <><LogIn className="w-4 h-4" />Sign In as {currentRole.label}</>
+              )}
             </button>
           </form>
 
-          <p className="text-center text-text-secondary text-sm mt-6">
-            Don't have an account?{' '}
-            <Link to="/signup" className="text-primary font-medium hover:underline">Create account</Link>
-          </p>
-          <p className="text-center text-text-muted text-xs mt-3">
-            <Link to="/" className="hover:text-primary transition-colors">← Back to marketplace</Link>
-          </p>
+          {/* Dev Credentials */}
+          {import.meta.env.DEV && (
+            <div className="mt-6 bg-indigo-50 border border-indigo-200 rounded-xl p-4">
+              <p className="text-xs font-bold text-indigo-500 uppercase tracking-wider mb-3">🛠 Dev Credentials</p>
+              <div className="space-y-1">
+                {[
+                  { role: Role.SUPER_ADMIN,  id: 'admin@nexstay.in',    pw: 'admin123',  label: 'Super Admin',  code: '' },
+                  { role: Role.HOSTEL_ADMIN, id: 'rajesh@nexstay.in',   pw: 'owner123',  label: 'Owner',        code: '' },
+                  { role: Role.WARDEN,       id: 'warden@nexstay.in',   pw: 'warden123', label: 'Warden',       code: 'NST-001' },
+                  { role: Role.MESS_MANAGER, id: 'mess@nexstay.in',     pw: 'mess123',   label: 'Mess Mgr',     code: 'NST-001' },
+                  { role: Role.STUDENT,      id: '9000000001',           pw: '0001',      label: 'Student',      code: 'NST-001' },
+                ].map(c => (
+                  <button key={c.role} type="button"
+                    onClick={() => { handleRoleChange(c.role); setIdentifier(c.id); setPassword(c.pw); setHostelCode(c.code); }}
+                    className="block w-full text-left text-xs text-indigo-600 hover:text-indigo-800 font-mono py-0.5 transition-colors">
+                    [{c.label}] {c.id} / {c.pw}{c.code ? ` · ${c.code}` : ''}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
